@@ -105,3 +105,21 @@ export function fieldLinksBody(contentTypeId: string, add: IFieldLinkAdd[], flag
   actions += `<Method Name="Update" Id="${id++}" ObjectPathId="4"><Parameters>${boolParam(false)}</Parameters></Method>`;
   return { actions, objectPaths };
 }
+
+/**
+ * web.SiteGroups.GetById(groupId).Owner = web.SiteGroups.GetById(ownerId); Update(). REST's
+ * SetUserAsOwner accepts only users – with a group ID it returns 200 and changes nothing (spike 07).
+ */
+export function setGroupOwnerBody(groupId: number, ownerGroupId: number): ICsomBody {
+  return {
+    actions:
+      '<ObjectPath Id="10" ObjectPathId="4" /><ObjectPath Id="11" ObjectPathId="5" />' +
+      '<SetProperty Id="12" ObjectPathId="4" Name="Owner"><Parameter ObjectPathId="5" /></SetProperty>' +
+      '<Method Name="Update" Id="13" ObjectPathId="4" />',
+    objectPaths:
+      ROOT +
+      '<Property Id="3" ParentId="2" Name="SiteGroups" />' +
+      `<Method Id="4" ParentId="3" Name="GetById"><Parameters><Parameter Type="Int32">${Math.floor(groupId)}</Parameter></Parameters></Method>` +
+      `<Method Id="5" ParentId="3" Name="GetById"><Parameters><Parameter Type="Int32">${Math.floor(ownerGroupId)}</Parameter></Parameters></Method>`
+  };
+}

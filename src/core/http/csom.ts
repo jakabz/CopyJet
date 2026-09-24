@@ -1,6 +1,6 @@
 import type { SPFI } from '@pnp/sp';
 import { CopyJetError } from '../errors';
-import { CREATE_CT_QUERY_ID, createContentTypeBody, fieldLinksBody, wrapRequest, type ICsomBody, type IFieldLinkAdd, type IFieldLinkFlags } from './csomXml';
+import { CREATE_CT_QUERY_ID, createContentTypeBody, fieldLinksBody, setGroupOwnerBody, wrapRequest, type ICsomBody, type IFieldLinkAdd, type IFieldLinkFlags } from './csomXml';
 import { rawPost, type FetchLike } from './raw';
 
 export type { FetchLike } from './raw';
@@ -78,4 +78,9 @@ export async function csomUpdateFieldLinks(
     return;
   }
   await processQuery(sp, fieldLinksBody(contentTypeId, add, flags), signal, fetchImpl);
+}
+
+/** Makes a SharePoint group the owner of another group (REST cannot, spike 07). */
+export async function csomSetGroupOwner(sp: SPFI, groupId: number, ownerGroupId: number, signal?: AbortSignal, fetchImpl?: FetchLike): Promise<void> {
+  await processQuery(sp, setGroupOwnerBody(groupId, ownerGroupId), signal, fetchImpl);
 }

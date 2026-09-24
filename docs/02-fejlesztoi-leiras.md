@@ -226,7 +226,7 @@ export interface IExtractor<TDef> {
 | `ListExtractor` | Lista/tár beállítások, tartalomtípusok (site-szintű ID, az első az alapértelmezett), mappák (a rendszermappák nélkül); a lista mezők és nézetek külön párban | Felhasználói lista = nem `Hidden`, nem `IsSystemList`, nem `IsCatalog` (lásd `docs/spikes/03`); támogatott sablon 100 és 101; kulcs az URL utolsó szegmenséből, ékezet nélkül |
 | `ListFieldExtractor` | Lista saját oszlopai és a listára tett site column példányok | `getList(url).fields`; saját oszlop = a `SourceID` a lista GUID-ja; példány = nem `FromBaseType` és `CanBeDeleted` (a beépített site columnoké is); a lista bejegyzésébe (`lists[].fields`) ír, `docs/spikes/05` |
 | `ViewExtractor` | Nyilvános, látható nézetek (nem `Hidden`, nem `PersonalView`) | `views` – `ViewQuery` (tokenizálva), `viewfields`, `RowLimit`, `Paged`, `Scope`, `CustomFormatter`; a lista bejegyzésébe (`lists[].views`) ír, `docs/spikes/06` |
-| `GroupExtractor` | SP-csoportok, szerepkör-hozzárendelések, opcionálisan tagok | `siteGroups`, `roleAssignments`; tagok csak ha `includeMembers` |
+| `GroupExtractor` | A site saját SP-csoportjai (webes jogosultsággal, az alapcsoportok nélkül), jogosultsági szintek, tulajdonos | `siteGroups`, `roleAssignments`; cím `{sitename} …` alakban; beépített szint angol néven (`RoleTypeKind` szerint), egyedi a saját nevén; felhasználó tulajdonos helyett `{associatedownergroup}` (2. fázisig); tagok csak ha `includeMembers` (2. fázis), `docs/spikes/07` |
 | `ListSecurityExtractor` | Egyedi listajogosultság | `HasUniqueRoleAssignments`, `roleAssignments.expand("Member,RoleDefinitionBindings")` |
 | `ItemExtractor` | Listaelemek, mellékletek | `RenderListDataAsStream` lapozással (`Paging`), mezőtípus szerinti szerializálás |
 | `FileExtractor` | Fájlok, metaadatok, opcionálisan verziók | `getFileByServerRelativePath().getBlob()`, `versions`; blob a packagerbe |
@@ -258,7 +258,7 @@ export interface IProvider<TDef> {
 
 | Provider | Létrehozás módja | Kritikus részletek |
 | --- | --- | --- |
-| `GroupProvider` | `siteGroups.add`, tulajdonos beállítása, `roleAssignments.add` | Tagok csak `includeMembers` esetén, `PrincipalMapper`-rel |
+| `GroupProvider` | `siteGroups.add`, tulajdonos **CSOM**-mal (`Group.Owner`, a REST `SetUserAsOwner` csoportot csendben figyelmen kívül hagy), `roleAssignments.add` | Keresés a feloldott cím szerint; szint `getByType(RoleTypeKind)`, egyedi `getByName`, hiányzónál figyelmeztetés; szintet soha nem vesz el; tagok csak `includeMembers` esetén, `PrincipalMapper`-rel (2. fázis) |
 | `SiteFieldProvider` | `fields.createFieldAsXml(resolvedSchemaXml)` | Lookup mezők itt nem; `ID` és `StaticName` megőrzése |
 | `ContentTypeProvider` | **CSOM**: `ContentTypes.Add` a megőrzött ID-val, `FieldLinks.Add` + jelzők, `Update(false)` (a REST egyiket sem tudja, lásd `docs/spikes/02`) | Szülő előbb; a megőrzött ID biztosítja az öröklést; létrehozás után ID-ellenőrzés |
 | `ListProvider` | Keresés URL szerint (`getList`, 404 = nincs); létrehozás az URL-névvel mint címmel, majd egy `MERGE` a címmel és a beállításokkal | A `lists.ensure` cím szerint keres és diff nélkül frissít, ezért nem használjuk; létrehozás után URL-ellenőrzés (`LIST_URL_MISMATCH`); címütközés és nem létrehozható URL = `unsupported`; tartalomtípus: `addAvailableContentType('<id>')`, sorrend: `RootFolder.UniqueContentTypeOrder` (verbose MERGE); mappák szintenként (`docs/spikes/04`); semmit nem töröl |
@@ -420,7 +420,7 @@ A fejlesztés a rendszerterv fázisait követi; minden fázis végén működő,
 
 **1. fázis – Szerkezet (MVP)**
 
-- [ ] Extractor + provider: site column, tartalomtípus, lista/tár, lista mező, nézet, SP-csoport
+- [x] Extractor + provider: site column, tartalomtípus, lista/tár, lista mező, nézet, SP-csoport
 - [ ] `planner` és `engine` (folytatás nélkül)
 - [ ] Setup: `ArtifactTree`, `ArtifactOptionsPanel`, `DependencyDialog`, export
 - [ ] Install: `TemplateLoader`, `PreviewStep`, `InstallStep`, `ResultStep`

@@ -1,3 +1,4 @@
+import { toTemplateKey, uniqueKeys } from '../keys';
 import type { IList } from '../model';
 
 /** List properties CopyJet reads from the REST API. */
@@ -63,35 +64,14 @@ export function urlLeaf(siteRelativeUrl: string): string {
   return parts[parts.length - 1];
 }
 
-/**
- * Template key from the URL leaf, matching the schema's key pattern: 'Shared Documents' → 'Shared_Documents',
- * 'Ügyfelek' → 'Ugyfelek' (accents dropped, not the letters).
- */
+/** Template key from the URL leaf: 'Shared Documents' → 'Shared_Documents', 'Ügyfelek' → 'Ugyfelek'. */
 export function listKeyFromUrl(siteRelativeUrl: string): string {
-  const key = urlLeaf(siteRelativeUrl)
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/\s+/g, '_')
-    .replace(/[^A-Za-z0-9_.-]/g, '')
-    .slice(0, 120);
-  return key || 'list';
+  return toTemplateKey(urlLeaf(siteRelativeUrl), 'list');
 }
 
 /** Keys for all given list URLs, unique within the site (a clash gets _2, _3 …). Order-independent. */
 export function assignListKeys(siteRelativeUrls: string[]): { [url: string]: string } {
-  const out: { [url: string]: string } = {};
-  const used: { [key: string]: boolean } = {};
-  siteRelativeUrls
-    .slice()
-    .sort()
-    .forEach((url) => {
-      const base = listKeyFromUrl(url);
-      let key = base;
-      for (let n = 2; used[key.toLowerCase()]; n++) key = `${base}_${n}`;
-      used[key.toLowerCase()] = true;
-      out[url] = key;
-    });
-  return out;
+  return uniqueKeys(siteRelativeUrls.map((url) => [url, urlLeaf(url)] as [string, string]), 'list');
 }
 
 export function toListDef(info: IListInfoLike, key: string, webServerRelativeUrl: string): IList {
