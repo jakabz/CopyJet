@@ -14,6 +14,7 @@ import {
   type IListFieldDef,
   type IListFieldInfoLike
 } from '../lists';
+import { listFieldDependencies } from '../planner/dependencies';
 import type { IArtifactRef, IDiscoveredArtifact, IExtractOptions, IExtractor, ITemplateWriter } from '../model';
 
 function listKeyOf(lookupList: string | undefined): string | undefined {
@@ -42,16 +43,8 @@ export class ListFieldExtractor implements IExtractor<IListFieldDef> {
     return out;
   }
 
-  /**
-   * The list, a lookup's target list, and the site column the field may be an instance of (the Setup keeps
-   * only dependencies it discovered, so the latter is dropped for the list's own columns).
-   */
   public dependencies(def: IListFieldDef): IArtifactRef[] {
-    const refs: IArtifactRef[] = [{ kind: 'list', key: `list:${def.listKey}` }];
-    const target = listKeyOf(def.field.lookupList);
-    if (target && target !== def.listKey) refs.push({ kind: 'list', key: `list:${target}` });
-    refs.push({ kind: 'siteField', key: `field:${def.field.internalName}` });
-    return refs;
+    return listFieldDependencies(def);
   }
 
   public async extract(sp: SPFI, refs: IArtifactRef[], opts: IExtractOptions, out: ITemplateWriter): Promise<void> {

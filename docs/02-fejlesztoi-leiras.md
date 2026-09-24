@@ -284,7 +284,9 @@ A `planner` a sablonból függőségi gráfot épít és lépéssort készít; a
 
 - `buildPlan(template, selection, diffs): IPlan` – csomópontok = `IArtifactRef` + fázis; élek = függőségek (pl. `listField:Projektek.Ugyfel` → `list:Ugyfelek`).
 - Kahn-algoritmus a topologikus rendezéshez; ugyanazon szinten lévő lépések párhuzamosíthatók.
-- Ciklusok feloldása: a lookup mezők és a lookup értékek külön lépésbe kerülnek (`listField`, `itemsLookupPass`), így a gráf mindig DAG.
+- Ciklusok feloldása: a lookup mezők és a lookup értékek külön lépésbe kerülnek (`listField`, `itemsLookupPass`), így a gráf általában DAG. Ha mégis kör marad (pl. lista → tartalomtípus → a listára mutató lookup site column), a körben lévő lépések `cycle` okkal kimaradnak, a sorrendet nem találgatjuk.
+- A függőségeket a `planner/dependencies.ts` írja le; ugyanezt használja a Setup (`extractor.dependencies`). Csak a sablonon belüli élek számítanak: a beépített tartalomtípusok és oszlopok a célon megvannak.
+- Egy szinten belül a sorrend: csoport, site column, tartalomtípus, lista, lista mező, nézet (determinisztikus kimenet).
 - Letiltott tétel esetén a tőle függő tételek is letiltódnak, és a UI ezt jelzi.
 
 | Fázis | Lépéstípusok |
@@ -308,7 +310,9 @@ A `planner` a sablonból függőségi gráfot épít és lépéssort készít; a
 - Minden lépés: `provider.apply` → tokenek regisztrálása → `state.saveProgress` → `logger`.
 - Hiba esetén a lépés `failed`, a függő lépések `blocked`, a függetlenek futnak tovább.
 - `AbortController` a leállításhoz; `resume(runId)` a kész lépéseket kihagyja, a tokeneket és `IdMap`-eket a `state`-ből tölti vissza.
-- `onProgress` események: `{ stepIndex, total, artifact, status, bytesDone?, bytesTotal? }`.
+- `onProgress` események: `{ done, total, ref, status }` (a bájtalapú mezők a 2. fázisban, a fájloknál jönnek).
+- `diffPlan(sp, plan, ctx, providers)` – az előnézethez: minden lépés diffje; ha egy függőség `new`, a lépés is `new`, a célt nem kérdezzük (egy új lista mezőjére a „lista hiányzik” félrevezető lenne).
+- `createProviders()` / `createExtractors()` (`engine/registry.ts`) – az 1. fázis párjai; `createInstallContext(sp, log)` – a cél site és az alapcsoportok tokenjei.
 
 ## 9. Core: packager
 
@@ -421,7 +425,7 @@ A fejlesztés a rendszerterv fázisait követi; minden fázis végén működő,
 **1. fázis – Szerkezet (MVP)**
 
 - [x] Extractor + provider: site column, tartalomtípus, lista/tár, lista mező, nézet, SP-csoport
-- [ ] `planner` és `engine` (folytatás nélkül)
+- [x] `planner` és `engine` (folytatás nélkül)
 - [ ] Setup: `ArtifactTree`, `ArtifactOptionsPanel`, `DependencyDialog`, export
 - [ ] Install: `TemplateLoader`, `PreviewStep`, `InstallStep`, `ResultStep`
 

@@ -14,6 +14,7 @@ import {
   type IListViewDef,
   type IViewInfoLike
 } from '../lists';
+import { viewDependencies } from '../planner/dependencies';
 import type { IArtifactRef, IDiscoveredArtifact, IExtractOptions, IExtractor, ITemplateWriter } from '../model';
 
 /** Public views of lists; written into the template's list entry, which the ListExtractor must have created. */
@@ -36,10 +37,8 @@ export class ViewExtractor implements IExtractor<IListViewDef> {
     return out;
   }
 
-  /** The list, and every column the view shows (the Setup keeps only list columns it discovered). */
   public dependencies(def: IListViewDef): IArtifactRef[] {
-    const refs: IArtifactRef[] = [{ kind: 'list', key: `list:${def.listKey}` }];
-    return refs.concat(def.view.fields.map((f) => ({ kind: 'listField' as const, key: `listField:${def.listKey}/${f}` })));
+    return viewDependencies(def);
   }
 
   public async extract(sp: SPFI, refs: IArtifactRef[], opts: IExtractOptions, out: ITemplateWriter): Promise<void> {

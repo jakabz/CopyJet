@@ -5,6 +5,7 @@ import { ContentTypes } from '@pnp/sp/content-types';
 import { contentTypeKey, isCustomContentType, parentIdOf, toContentTypeDef, type IContentTypeInfoLike, type IFieldLinkInfoLike } from '../contentTypes';
 import { throwIfAborted } from '../errors';
 import { limitConcurrency } from '../http/concurrency';
+import { contentTypeDependencies } from '../planner/dependencies';
 import type { IArtifactRef, IContentType, IDiscoveredArtifact, IExtractOptions, IExtractor, ITemplateWriter } from '../model';
 
 const SELECT = ['StringId', 'Name', 'Group', 'Description', 'Hidden', 'ReadOnly', 'Sealed', 'SchemaXml'];
@@ -19,16 +20,8 @@ export class ContentTypeExtractor implements IExtractor<IContentType> {
     return cts.map((ct) => ({ ref: { kind: this.kind, key: contentTypeKey(ct.StringId) }, title: ct.Name, group: ct.Group }));
   }
 
-  /**
-   * The parent (unless it is a built-in type, which exists everywhere – the Setup keeps only dependencies it
-   * discovered) and the site columns the type links. Built-in columns are filtered the same way.
-   */
   public dependencies(def: IContentType): IArtifactRef[] {
-    const refs: IArtifactRef[] = def.fieldRefs.map((r) => ({ kind: 'siteField' as const, key: `field:${r.internalName}` }));
-    if (def.parentId && def.parentId !== '0x') {
-      refs.unshift({ kind: 'contentType', key: contentTypeKey(def.parentId) });
-    }
-    return refs;
+    return contentTypeDependencies(def);
   }
 
   public async extract(sp: SPFI, refs: IArtifactRef[], opts: IExtractOptions, out: ITemplateWriter): Promise<void> {

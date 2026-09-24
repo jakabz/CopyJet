@@ -3,6 +3,7 @@ import '@pnp/sp/webs';
 import '@pnp/sp/fields';
 import { throwIfAborted } from '../errors';
 import { isCustomField, templateFieldFrom, type IFieldInfoLike } from '../fields';
+import { siteFieldDependencies } from '../planner/dependencies';
 import type { IArtifactRef, IDiscoveredArtifact, IExtractOptions, IExtractor, IField, ITemplateWriter } from '../model';
 
 /**
@@ -30,8 +31,7 @@ export class SiteFieldExtractor implements IExtractor<IField> {
   }
 
   public dependencies(def: IField): IArtifactRef[] {
-    const listKey = listKeyOf(def.lookupList);
-    return listKey ? [{ kind: 'list', key: `list:${listKey}` }] : [];
+    return siteFieldDependencies(def);
   }
 
   public async extract(sp: SPFI, refs: IArtifactRef[], opts: IExtractOptions, out: ITemplateWriter): Promise<void> {

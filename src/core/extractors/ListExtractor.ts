@@ -2,6 +2,7 @@ import type { SPFI } from '@pnp/sp';
 import { throwIfAborted } from '../errors';
 import { limitConcurrency } from '../http/concurrency';
 import { isSupportedTemplate, listFolderPaths, loadSourceSite, readListContentTypes, siteContentTypeIdOf, toListDef, type IListInfoLike } from '../lists';
+import { listDependencies } from '../planner/dependencies';
 import type { IArtifactRef, IDiscoveredArtifact, IExtractOptions, IExtractor, IList, ITemplateWriter } from '../model';
 
 export const listRefKey = (key: string): string => `list:${key}`;
@@ -22,9 +23,8 @@ export class ListExtractor implements IExtractor<IList> {
     });
   }
 
-  /** Content types the list uses (by ID); built-in ones are ignored by the Setup as they are not discovered. */
   public dependencies(def: IList): IArtifactRef[] {
-    return (def.contentTypes || []).filter((ct) => /^0x/i.test(ct)).map((ct) => ({ kind: 'contentType' as const, key: `contentType:${ct}` }));
+    return listDependencies(def);
   }
 
   public async extract(sp: SPFI, refs: IArtifactRef[], opts: IExtractOptions, out: ITemplateWriter): Promise<void> {

@@ -13,6 +13,7 @@ import {
   type IWebSecurity
 } from '../groups';
 import { uniqueKeys } from '../keys';
+import { groupDependencies } from '../planner/dependencies';
 import type { IArtifactRef, IDiscoveredArtifact, IExtractOptions, IExtractor, IGroup, ITemplateWriter } from '../model';
 
 interface ISourceGroup {
@@ -32,10 +33,8 @@ export class GroupExtractor implements IExtractor<IGroup> {
     return groups.map((g) => ({ ref: { kind: this.kind, key: groupRefKey(g.key) }, title: g.info.Title }));
   }
 
-  /** A group owning this one. */
   public dependencies(def: IGroup): IArtifactRef[] {
-    const m = def.owner ? /^\{groupkey:([^{}]+)\}$/.exec(def.owner) : null;
-    return m && m[1] !== def.key ? [{ kind: 'group', key: groupRefKey(m[1]) }] : [];
+    return groupDependencies(def);
   }
 
   public async extract(sp: SPFI, refs: IArtifactRef[], opts: IExtractOptions, out: ITemplateWriter): Promise<void> {
