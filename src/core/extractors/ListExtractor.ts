@@ -17,7 +17,12 @@ export class ListExtractor implements IExtractor<IList> {
   public async discover(sp: SPFI, signal?: AbortSignal): Promise<IDiscoveredArtifact[]> {
     const site = await loadSourceSite(sp, signal);
     return site.lists.map((l) => {
-      const found: IDiscoveredArtifact = { ref: { kind: this.kind, key: listRefKey(l.key) }, title: l.info.Title, itemCount: l.info.ItemCount };
+      const found: IDiscoveredArtifact = {
+        ref: { kind: this.kind, key: listRefKey(l.key) },
+        title: l.info.Title,
+        itemCount: l.info.ItemCount,
+        listTemplate: l.info.BaseTemplate
+      };
       if (!isSupportedTemplate(l.info.BaseTemplate)) found.unsupported = 'LIST_TEMPLATE_UNSUPPORTED';
       return found;
     });

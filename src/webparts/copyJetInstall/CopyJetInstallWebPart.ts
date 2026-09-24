@@ -21,7 +21,8 @@ export default class CopyJetInstallWebPart extends BaseClientSideWebPart<ICopyJe
   public render(): void {
     const element: React.ReactElement<ICopyJetInstallProps> = React.createElement(CopyJetInstall, {
       sp: this._sp,
-      siteTitle: this.context.pageContext.web.title
+      siteTitle: this.context.pageContext.web.title,
+      siteUrl: this.context.pageContext.web.absoluteUrl
     });
     ReactDom.render(element, this.domElement);
   }

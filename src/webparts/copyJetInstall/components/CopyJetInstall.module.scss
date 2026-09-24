@@ -1,62 +1,146 @@
-.drop {
-  border: 2px dashed "[theme:neutralTertiaryAlt, default: #c8c6c4]";
-  border-radius: 4px;
-  padding: 20px;
-}
+@use '../../../shared/styles/tokens' as t;
 
-.dragging {
-  border-color: "[theme:themePrimary, default: #0078d4]";
-  background: "[theme:themeLighterAlt, default: #eff6fc]";
+.srOnly {
+  position: absolute;
+  left: -9999px;
 }
 
 .hidden {
   display: none;
 }
 
-.facts th {
-  text-align: left;
-  padding: 2px 16px 2px 0;
-  font-weight: 600;
-  vertical-align: top;
-}
-
-.preview {
-  border-collapse: collapse;
-  width: 100%;
-
-  th {
-    text-align: left;
-    border-bottom: 1px solid "[theme:neutralLight, default: #edebe9]";
-    padding: 4px 8px;
-  }
-
-  td {
-    padding: 2px 8px;
-    border-bottom: 1px solid "[theme:neutralLighter, default: #f3f2f1]";
-    vertical-align: middle;
-  }
-}
-
-.new td:last-child {
-  color: "[theme:themePrimary, default: #0078d4]";
-}
-
-.different td:last-child {
-  color: "[theme:warningText, default: #8a6d3b]";
-}
-
-.unsupported td:last-child,
-.error td:last-child {
-  color: "[theme:errorText, default: #a4262c]";
-}
-
-.off {
-  color: "[theme:neutralTertiary, default: #a19f9d]";
-}
-
-.count {
+// ---- Load (docs/ui install-1) ----
+.drop {
   display: flex;
   flex-direction: column;
   align-items: center;
-  min-width: 90px;
+  justify-content: center;
+  gap: 10px;
+  min-height: 200px;
+  border: 2px dashed #9e9e9e;
+  border-radius: t.$radiusCard;
+  background: t.$surfaceAlt;
+}
+
+.dragging {
+  border-color: t.$primary;
+  background: t.$primaryLight;
+}
+
+.dropIcon {
+  font-size: 32px;
+  color: t.$muted;
+}
+
+.dropText {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.urlPanel {
+  flex: 0 0 360px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px;
+  border-radius: t.$radiusCard;
+  box-sizing: border-box;
+}
+
+.templateCard {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px;
+  border-radius: t.$radiusCard;
+}
+
+.templateName {
+  font-size: 15px;
+  font-weight: 600;
+  flex-grow: 1;
+}
+
+.factsGrid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  font-size: 13px;
+}
+
+// ---- Preview (docs/ui install-3) ----
+.previewBar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.previewTable {
+  overflow: auto;
+  max-height: 520px;
+}
+
+.changes {
+  font-size: 12px;
+}
+
+.off td {
+  color: t.$muted;
+}
+
+// ---- Install (docs/ui install-4) ----
+.phases {
+  padding: 8px 0;
+  box-sizing: border-box;
+}
+
+.phase {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 12px;
+}
+
+.phaseIcon {
+  width: 16px;
+  display: flex;
+  justify-content: center;
+}
+
+.phaseNo {
+  width: 20px;
+}
+
+.phase_done .phaseIcon {
+  color: #107c10;
+}
+
+.phase_current {
+  color: t.$primary;
+  font-weight: 600;
+}
+
+.phase_failed .phaseIcon {
+  color: t.$danger;
+}
+
+.phase_waiting {
+  color: t.$muted;
+}
+
+.waitingDot {
+  width: 12px;
+  height: 12px;
+  border-radius: 6px;
+  border: 2px solid #9e9e9e;
+  box-sizing: border-box;
+}
+
+// ---- Result (docs/ui install-5) ----
+.resultBox {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 16px;
 }
