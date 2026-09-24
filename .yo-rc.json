@@ -1,0 +1,22 @@
+{
+  "@microsoft/generator-sharepoint": {
+    "whichFolder": "subdir",
+    "solutionName": "copyjet",
+    "environment": "spo",
+    "useGulp": false,
+    "componentType": "webpart",
+    "template": "react",
+    "componentName": "CopyJetInstall",
+    "plusBeta": false,
+    "isCreatingSolution": false,
+    "nodeVersion": "22.23.2",
+    "sdksVersions": {},
+    "version": "1.23.2",
+    "libraryName": "copyjet",
+    "libraryId": "9b34d728-733f-4bb0-9ffa-055351d20dce",
+    "packageManager": "npm",
+    "solutionShortDescription": "copyjet description",
+    "skipFeatureDeployment": false,
+    "isDomainIsolated": false
+  }
+}

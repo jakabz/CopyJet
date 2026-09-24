@@ -1,0 +1,448 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://copyjet.local/schema/copyjet.v1.schema.json",
+  "title": "CopyJet sablon (manifest.json) – v1",
+  "description": "A CopyJet Setup webpart által készített, az Install webpart által telepített hordozható SharePoint site-sablon. A site-függő értékek tokenekkel szerepelnek ({site}, {listkey:X}, {fieldid:X}, {principal:key} ...).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "meta", "siteFields", "contentTypes", "lists", "groups", "pages", "principals"],
+  "properties": {
+    "$schema": { "type": "string" },
+    "schemaVersion": { "type": "string", "pattern": "^1\\.[0-9]+$", "description": "A séma fő.al verziója. Az Install a fő verzió egyezését követeli meg, az alverziót migrálja." },
+    "meta": { "$ref": "#/$defs/meta" },
+    "siteFields": { "type": "array", "items": { "$ref": "#/$defs/field" }, "default": [] },
+    "contentTypes": { "type": "array", "items": { "$ref": "#/$defs/contentType" }, "default": [] },
+    "lists": { "type": "array", "items": { "$ref": "#/$defs/list" }, "default": [] },
+    "groups": { "type": "array", "items": { "$ref": "#/$defs/group" }, "default": [] },
+    "pages": { "type": "array", "items": { "$ref": "#/$defs/page" }, "default": [] },
+    "navigation": { "$ref": "#/$defs/navigation" },
+    "principals": { "type": "array", "items": { "$ref": "#/$defs/principal" }, "default": [] },
+    "terms": { "type": "array", "items": { "$ref": "#/$defs/termRef" }, "default": [], "description": "A sablonban hivatkozott Managed Metadata termek; tenantok közötti leképezés alapja." }
+  },
+
+  "$defs": {
+    "key": { "type": "string", "pattern": "^[A-Za-z0-9_.-]{1,128}$", "description": "Sablonon belüli hivatkozási kulcs." },
+    "internalName": { "type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]{0,254}$" },
+    "guid": { "type": "string", "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$" },
+    "tokenString": { "type": "string", "description": "Szöveg, amely tokeneket tartalmazhat, pl. {site}/Lists/Projektek." },
+    "packagePath": { "type": "string", "pattern": "^(?!/)(?!.*\\.\\.)[^\\\\]+$", "description": "Csomagon (.zip) belüli relatív útvonal; nem kezdődhet /-rel és nem tartalmazhat ..-t." },
+    "dateTime": { "type": "string", "format": "date-time" },
+
+    "meta": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "createdBy", "createdAt", "sourceSiteUrl", "sourceTenant", "sourceLcid", "includesContent", "generator"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1, "maxLength": 255 },
+        "description": { "type": "string", "maxLength": 2000 },
+        "createdBy": { "type": "string" },
+        "createdAt": { "$ref": "#/$defs/dateTime" },
+        "sourceSiteUrl": { "type": "string", "format": "uri" },
+        "sourceTenant": { "type": "string", "description": "pl. contoso.onmicrosoft.com" },
+        "sourceTenantId": { "$ref": "#/$defs/guid" },
+        "sourceLcid": { "type": "integer", "minimum": 1025, "maximum": 99999 },
+        "sourceTimeZone": { "type": "string" },
+        "includesContent": { "type": "boolean" },
+        "generator": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["name", "version"],
+          "properties": { "name": { "const": "CopyJet" }, "version": { "type": "string" } }
+        },
+        "checksum": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$", "description": "A csomag tartalmának ellenőrzőösszege (a manifest checksum mezője nélkül számolva)." },
+        "estimatedSizeBytes": { "type": "integer", "minimum": 0 },
+        "warnings": { "type": "array", "items": { "$ref": "#/$defs/warning" } }
+      }
+    },
+
+    "warning": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "message"],
+      "properties": {
+        "code": { "type": "string" },
+        "message": { "type": "string" },
+        "artifact": { "type": "string" }
+      }
+    },
+
+    "fieldType": {
+      "enum": ["Text", "Note", "Number", "Currency", "Integer", "Boolean", "Choice", "MultiChoice", "DateTime",
+               "URL", "Lookup", "LookupMulti", "User", "UserMulti", "TaxonomyFieldType", "TaxonomyFieldTypeMulti",
+               "Calculated", "Location", "Image", "Thumbnail", "Computed", "Other"]
+    },
+
+    "field": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["internalName", "type", "title", "schemaXml"],
+      "properties": {
+        "id": { "$ref": "#/$defs/guid", "description": "Site column esetén megőrzött ID (tartalomtípus-hivatkozások miatt)." },
+        "internalName": { "$ref": "#/$defs/internalName" },
+        "type": { "$ref": "#/$defs/fieldType" },
+        "title": { "type": "string" },
+        "group": { "type": "string" },
+        "description": { "type": "string" },
+        "required": { "type": "boolean", "default": false },
+        "hidden": { "type": "boolean", "default": false },
+        "indexed": { "type": "boolean", "default": false },
+        "enforceUniqueValues": { "type": "boolean", "default": false },
+        "choices": { "type": "array", "items": { "type": "string" } },
+        "defaultValue": { "type": ["string", "null"] },
+        "formula": { "type": "string" },
+        "lookupList": { "$ref": "#/$defs/tokenString", "description": "Lookup esetén: {listkey:X}" },
+        "lookupField": { "$ref": "#/$defs/internalName" },
+        "termSet": { "$ref": "#/$defs/termSetRef" },
+        "customFormatter": { "type": "string", "description": "Oszlopformázás JSON szövegként." },
+        "schemaXml": { "type": "string", "minLength": 7, "description": "Tokenizált, szűrt SchemaXml; ebből készül a mező (createFieldAsXml)." }
+      },
+      "allOf": [
+        { "if": { "properties": { "type": { "enum": ["Choice", "MultiChoice"] } } }, "then": { "required": ["choices"] } },
+        { "if": { "properties": { "type": { "enum": ["Lookup", "LookupMulti"] } } }, "then": { "required": ["lookupList", "lookupField"] } },
+        { "if": { "properties": { "type": { "enum": ["TaxonomyFieldType", "TaxonomyFieldTypeMulti"] } } }, "then": { "required": ["termSet"] } },
+        { "if": { "properties": { "type": { "const": "Calculated" } } }, "then": { "required": ["formula"] } }
+      ]
+    },
+
+    "contentType": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "name", "fieldRefs"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^0x[0-9A-Fa-f]+$" },
+        "name": { "type": "string" },
+        "group": { "type": "string" },
+        "description": { "type": "string" },
+        "parentId": { "type": "string", "pattern": "^0x[0-9A-Fa-f]*$" },
+        "fieldRefs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["internalName"],
+            "properties": {
+              "internalName": { "$ref": "#/$defs/internalName" },
+              "required": { "type": "boolean" },
+              "hidden": { "type": "boolean" }
+            }
+          }
+        }
+      }
+    },
+
+    "list": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["key", "url", "title", "template", "content"],
+      "properties": {
+        "key": { "$ref": "#/$defs/key" },
+        "url": { "type": "string", "description": "Site-relatív URL, pl. Lists/Projektek vagy Shared Documents." },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "template": { "type": "integer", "enum": [100, 101, 119], "description": "100 = Custom List, 101 = Document Library, 119 = Site Pages. Más sablonok az 1. verzióban nem támogatottak." },
+        "hidden": { "type": "boolean", "default": false },
+        "onQuickLaunch": { "type": "boolean" },
+        "enableVersioning": { "type": "boolean" },
+        "enableMinorVersions": { "type": "boolean" },
+        "majorVersionLimit": { "type": "integer", "minimum": 0 },
+        "enableModeration": { "type": "boolean" },
+        "enableAttachments": { "type": "boolean" },
+        "enableFolderCreation": { "type": "boolean" },
+        "forceCheckout": { "type": "boolean" },
+        "contentTypesEnabled": { "type": "boolean" },
+        "contentTypes": { "type": "array", "items": { "type": "string" }, "description": "Tartalomtípus nevek vagy ID-k; az első az alapértelmezett." },
+        "fields": { "type": "array", "items": { "$ref": "#/$defs/field" } },
+        "views": { "type": "array", "items": { "$ref": "#/$defs/view" } },
+        "folders": { "type": "array", "items": { "$ref": "#/$defs/folder" } },
+        "security": { "$ref": "#/$defs/security" },
+        "content": { "$ref": "#/$defs/listContent" }
+      }
+    },
+
+    "view": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["title", "fields"],
+      "properties": {
+        "id": { "$ref": "#/$defs/guid" },
+        "title": { "type": "string" },
+        "default": { "type": "boolean", "default": false },
+        "personal": { "const": false },
+        "fields": { "type": "array", "items": { "$ref": "#/$defs/internalName" } },
+        "query": { "type": "string", "description": "CAML ViewQuery (Where/OrderBy/GroupBy), tokenizálva." },
+        "rowLimit": { "type": "integer", "minimum": 1, "maximum": 5000 },
+        "paged": { "type": "boolean" },
+        "scope": { "enum": ["Default", "Recursive", "RecursiveAll", "FilesOnly"] },
+        "viewType": { "enum": ["HTML", "GRID", "CALENDAR"] },
+        "customFormatter": { "type": "string" }
+      }
+    },
+
+    "folder": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path"],
+      "properties": {
+        "path": { "type": "string", "description": "A lista gyökerétől relatív mappaútvonal, pl. 2026/Q1" },
+        "contentTypeId": { "type": "string" }
+      }
+    },
+
+    "security": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["breakInheritance"],
+      "properties": {
+        "breakInheritance": { "type": "boolean" },
+        "copyRoleAssignments": { "type": "boolean", "default": false },
+        "roleAssignments": { "type": "array", "items": { "$ref": "#/$defs/roleAssignment" } }
+      }
+    },
+
+    "roleAssignment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["principal", "roles"],
+      "properties": {
+        "principal": { "$ref": "#/$defs/tokenString", "description": "{groupkey:X}, {associatedownergroup}/{associatedmembergroup}/{associatedvisitorgroup} vagy {principal:key}" },
+        "roles": { "type": "array", "minItems": 1, "items": { "type": "string" }, "description": "Jogosultsági szint neve (pl. Full Control, Edit, Contribute, Read) vagy egyedi szint neve." }
+      }
+    },
+
+    "listContent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode"],
+      "properties": {
+        "mode": { "enum": ["none", "items", "files"] },
+        "sourceMode": { "enum": ["embedded", "reference"], "default": "embedded" },
+        "includeVersions": { "type": "boolean", "default": false },
+        "includeAttachments": { "type": "boolean", "default": true },
+        "filter": { "type": "string", "description": "Opcionális CAML/OData szűrő vagy mappa, amelyet a Setup alkalmazott." },
+        "itemCount": { "type": "integer", "minimum": 0 },
+        "fileCount": { "type": "integer", "minimum": 0 },
+        "sizeBytes": { "type": "integer", "minimum": 0 },
+        "source": { "$ref": "#/$defs/packagePath", "description": "items/<key>.json vagy files/<key>/" },
+        "sourceUrl": { "type": "string", "format": "uri", "description": "Csak reference módban: a forrás lista/tár abszolút URL-je." }
+      },
+      "allOf": [
+        { "if": { "properties": { "mode": { "enum": ["items", "files"] } } }, "then": { "required": ["source"] } },
+        { "if": { "properties": { "sourceMode": { "const": "reference" } }, "required": ["sourceMode"] }, "then": { "required": ["sourceUrl"] } }
+      ]
+    },
+
+    "group": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["key", "title"],
+      "properties": {
+        "key": { "$ref": "#/$defs/key" },
+        "title": { "$ref": "#/$defs/tokenString" },
+        "description": { "type": "string" },
+        "owner": { "$ref": "#/$defs/tokenString" },
+        "onlyAllowMembersViewMembership": { "type": "boolean" },
+        "allowMembersEditMembership": { "type": "boolean" },
+        "allowRequestToJoinLeave": { "type": "boolean" },
+        "roles": { "type": "array", "items": { "type": "string" }, "description": "Site-szintű jogosultsági szintek." },
+        "includeMembers": { "type": "boolean", "default": false },
+        "members": { "type": "array", "items": { "$ref": "#/$defs/tokenString" }, "description": "{principal:key} tokenek; csak includeMembers = true esetén." }
+      },
+      "if": { "properties": { "includeMembers": { "const": false } } },
+      "then": { "properties": { "members": { "maxItems": 0 } } }
+    },
+
+    "page": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "title", "layout", "source"],
+      "properties": {
+        "name": { "type": "string", "pattern": "^[^/\\\\]+\\.aspx$" },
+        "title": { "type": "string" },
+        "layout": { "enum": ["Article", "Home", "SingleWebPartAppPage", "RepostPage", "Spaces"] },
+        "isHomePage": { "type": "boolean", "default": false },
+        "promotedState": { "type": "integer", "enum": [0, 1, 2], "description": "0 = lap, 2 = hír" },
+        "commentsDisabled": { "type": "boolean" },
+        "source": { "$ref": "#/$defs/packagePath", "description": "pages/<név>.json – a lap vászna és fejléce (lásd $defs/pageFile)." },
+        "assets": { "type": "array", "items": { "$ref": "#/$defs/packagePath" }, "description": "A laphoz tartozó képek a csomag assets/ mappájában." },
+        "requiredWebParts": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["id", "title"],
+            "properties": { "id": { "$ref": "#/$defs/guid" }, "title": { "type": "string" }, "isCustom": { "type": "boolean" } }
+          }
+        }
+      }
+    },
+
+    "navigation": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "mode": { "enum": ["append", "replace"], "default": "append" },
+        "quickLaunch": { "type": "array", "items": { "$ref": "#/$defs/navNode" } },
+        "topNavigation": { "type": "array", "items": { "$ref": "#/$defs/navNode" } }
+      }
+    },
+
+    "navNode": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["title", "url"],
+      "properties": {
+        "title": { "type": "string" },
+        "url": { "$ref": "#/$defs/tokenString" },
+        "isExternal": { "type": "boolean", "default": false },
+        "children": { "type": "array", "maxItems": 100, "items": { "$ref": "#/$defs/navNode" } }
+      }
+    },
+
+    "principal": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["key", "kind"],
+      "properties": {
+        "key": { "$ref": "#/$defs/key" },
+        "kind": { "enum": ["user", "securityGroup", "m365Group", "everyone"] },
+        "loginName": { "type": "string", "description": "pl. i:0#.f|membership|anna@contoso.com" },
+        "email": { "type": "string" },
+        "upn": { "type": "string" },
+        "displayName": { "type": "string" }
+      }
+    },
+
+    "termSetRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["termSetId", "path"],
+      "properties": {
+        "termStoreId": { "$ref": "#/$defs/guid" },
+        "termSetId": { "$ref": "#/$defs/guid" },
+        "anchorId": { "$ref": "#/$defs/guid" },
+        "path": { "type": "string", "description": "Termcsoport/Termkészlet – tenantok közötti leképezéshez." },
+        "isOpen": { "type": "boolean" }
+      }
+    },
+
+    "termRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["key", "termId", "path"],
+      "properties": {
+        "key": { "$ref": "#/$defs/key" },
+        "termId": { "$ref": "#/$defs/guid" },
+        "termSetId": { "$ref": "#/$defs/guid" },
+        "label": { "type": "string" },
+        "path": { "type": "string", "description": "Termcsoport/Termkészlet/Szülő/Term – címke-útvonal." }
+      }
+    },
+
+    "fieldValue": {
+      "description": "Egy mezőérték a sablonban. Egyszerű típusok közvetlenül; összetettek objektumként.",
+      "oneOf": [
+        { "type": ["string", "number", "boolean", "null"] },
+        { "type": "array", "items": { "type": ["string", "number"] }, "description": "MultiChoice" },
+        { "type": "object", "additionalProperties": false, "required": ["lookup"], "properties": { "lookup": { "type": "array", "items": { "type": "integer" }, "description": "Forrás elem-ID(-k); az Install az IdMap alapján oldja fel." } } },
+        { "type": "object", "additionalProperties": false, "required": ["principals"], "properties": { "principals": { "type": "array", "items": { "$ref": "#/$defs/tokenString" } } } },
+        { "type": "object", "additionalProperties": false, "required": ["terms"], "properties": { "terms": { "type": "array", "items": { "type": "string" }, "description": "termRef kulcsok" } } },
+        { "type": "object", "additionalProperties": false, "required": ["url"], "properties": { "url": { "$ref": "#/$defs/tokenString" }, "description": { "type": "string" } } },
+        { "type": "object", "additionalProperties": false, "required": ["asset"], "properties": { "asset": { "$ref": "#/$defs/packagePath" } }, "description": "Image mező: a kép a csomagban." }
+      ]
+    },
+
+    "systemValues": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "author": { "$ref": "#/$defs/tokenString" },
+        "editor": { "$ref": "#/$defs/tokenString" },
+        "created": { "$ref": "#/$defs/dateTime" },
+        "modified": { "$ref": "#/$defs/dateTime" }
+      }
+    },
+
+    "itemsFile": {
+      "$comment": "items/<listkey>.json – külön fájl a csomagban",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["listKey", "items"],
+      "properties": {
+        "listKey": { "$ref": "#/$defs/key" },
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["sourceId", "values"],
+            "properties": {
+              "sourceId": { "type": "integer", "minimum": 1 },
+              "folder": { "type": "string" },
+              "contentType": { "type": "string" },
+              "values": { "type": "object", "propertyNames": { "$ref": "#/$defs/internalName" }, "additionalProperties": { "$ref": "#/$defs/fieldValue" } },
+              "system": { "$ref": "#/$defs/systemValues" },
+              "attachments": { "type": "array", "items": { "$ref": "#/$defs/packagePath" } }
+            }
+          }
+        }
+      }
+    },
+
+    "filesMetaFile": {
+      "$comment": "files/<listkey>/_meta.json – külön fájl a csomagban",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["listKey", "files"],
+      "properties": {
+        "listKey": { "$ref": "#/$defs/key" },
+        "files": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["path", "sizeBytes"],
+            "properties": {
+              "path": { "type": "string", "description": "A tár gyökerétől relatív útvonal fájlnévvel." },
+              "blob": { "$ref": "#/$defs/packagePath", "description": "embedded mód: a fájl helye a csomagban" },
+              "sourceUrl": { "type": "string", "description": "reference mód: szerver-relatív forrás URL" },
+              "sizeBytes": { "type": "integer", "minimum": 0 },
+              "sourceId": { "type": "integer" },
+              "contentType": { "type": "string" },
+              "values": { "type": "object", "additionalProperties": { "$ref": "#/$defs/fieldValue" } },
+              "system": { "$ref": "#/$defs/systemValues" },
+              "versions": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["label", "blob"],
+                  "properties": {
+                    "label": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+$" },
+                    "blob": { "$ref": "#/$defs/packagePath" },
+                    "system": { "$ref": "#/$defs/systemValues" },
+                    "comment": { "type": "string" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+
+    "pageFile": {
+      "$comment": "pages/<lapnév>.json – külön fájl a csomagban",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "canvasContent"],
+      "properties": {
+        "name": { "type": "string" },
+        "canvasContent": { "type": "array", "description": "A CanvasContent1 JSON tömbje, tokenizált webpart-tulajdonságokkal." },
+        "layoutWebpartsContent": { "type": ["array", "string", "null"], "description": "Fejléc (LayoutWebpartsContent)." },
+        "bannerImage": { "$ref": "#/$defs/packagePath" },
+        "description": { "type": "string" },
+        "topicHeader": { "type": "string" }
+      }
+    }
+  }
+}

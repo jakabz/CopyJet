@@ -1,0 +1,27 @@
+{
+  "schemaVersion": "1.0",
+  "meta": {
+    "name": "Hibás: csomagból kimutató tartalomútvonal",
+    "createdBy": "anna@contoso.com",
+    "createdAt": "2026-09-24T10:00:00Z",
+    "sourceSiteUrl": "https://contoso.sharepoint.com/sites/projekt",
+    "sourceTenant": "contoso.onmicrosoft.com",
+    "sourceLcid": 1038,
+    "includesContent": true,
+    "generator": { "name": "CopyJet", "version": "0.0.1" }
+  },
+  "siteFields": [],
+  "contentTypes": [],
+  "lists": [
+    {
+      "key": "Projektek",
+      "url": "Lists/Projektek",
+      "title": "Projektek",
+      "template": 100,
+      "content": { "mode": "items", "source": "../../etc/items.json" }
+    }
+  ],
+  "groups": [],
+  "pages": [],
+  "principals": []
+}

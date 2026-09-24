@@ -1,0 +1,26 @@
+{
+  "schemaVersion": "1.0",
+  "meta": {
+    "name": "Hibás: Choice mező választási lehetőségek nélkül",
+    "createdBy": "anna@contoso.com",
+    "createdAt": "2026-09-24T10:00:00Z",
+    "sourceSiteUrl": "https://contoso.sharepoint.com/sites/projekt",
+    "sourceTenant": "contoso.onmicrosoft.com",
+    "sourceLcid": 1038,
+    "includesContent": false,
+    "generator": { "name": "CopyJet", "version": "0.0.1" }
+  },
+  "siteFields": [
+    {
+      "internalName": "CJ_Status",
+      "type": "Choice",
+      "title": "Státusz",
+      "schemaXml": "<Field Name=\"CJ_Status\" Type=\"Choice\" />"
+    }
+  ],
+  "contentTypes": [],
+  "lists": [],
+  "groups": [],
+  "pages": [],
+  "principals": []
+}

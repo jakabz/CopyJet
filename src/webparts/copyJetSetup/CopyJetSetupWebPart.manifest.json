@@ -1,0 +1,23 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/spfx/client-side-web-part-manifest.schema.json",
+  "id": "19deed9a-739c-4492-bc51-62f51f3007f0",
+  "alias": "CopyJetSetupWebPart",
+  "componentType": "WebPart",
+
+  // The "*" signifies that the version should be taken from the package.json
+  "version": "*",
+  "manifestVersion": 2,
+
+  "requiresCustomScript": false,
+  "supportedHosts": ["SharePointWebPart", "SharePointFullPage"],
+  "supportsThemeVariants": true,
+
+  "preconfiguredEntries": [{
+    "groupId": "5c03119e-3074-46fd-976b-c60198311f70", // Advanced
+    "group": { "default": "Advanced", "hu-HU": "Speciális" },
+    "title": { "default": "CopyJet Setup", "hu-HU": "CopyJet – sablon készítése" },
+    "description": { "default": "Saves this site (or parts of it) as a portable CopyJet template.", "hu-HU": "A site egészét vagy részeit hordozható CopyJet-sablonba menti." },
+    "officeFabricIconFontName": "CloudUpload",
+    "properties": {}
+  }]
+}

@@ -1,0 +1,15 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "module": "commonjs",
+    "target": "es2020",
+    "lib": ["dom", "es2020"],
+    "allowJs": true,
+    "rootDir": ".",
+    "outDir": "./temp/jest",
+    "types": ["jest", "node"],
+    "declaration": false,
+    "declarationMap": false
+  },
+  "include": ["src/core/**/*.ts", "tests/**/*.ts"]
+}

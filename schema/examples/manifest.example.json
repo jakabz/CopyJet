@@ -1,0 +1,149 @@
+{
+  "$schema": "../copyjet.v1.schema.json",
+  "schemaVersion": "1.0",
+  "meta": {
+    "name": "Projekt site sablon",
+    "description": "Projektek, ügyfelek és dokumentumok tartalommal",
+    "createdBy": "anna@contoso.com",
+    "createdAt": "2026-09-24T10:00:00Z",
+    "sourceSiteUrl": "https://contoso.sharepoint.com/sites/projekt",
+    "sourceTenant": "contoso.onmicrosoft.com",
+    "sourceLcid": 1038,
+    "sourceTimeZone": "Central Europe Standard Time",
+    "includesContent": true,
+    "generator": { "name": "CopyJet", "version": "1.0.0" },
+    "checksum": "sha256:3f2a9c1e5b7d4e8a9c217d4e5f6a8b903f2a9c1e5b7d4e8a9c217d4e5f6a8b90",
+    "estimatedSizeBytes": 144703488,
+    "warnings": [
+      { "code": "USER_NOT_FOUND", "message": "2 elem hivatkozik nem létező felhasználóra", "artifact": "list:Feladatok" }
+    ]
+  },
+  "siteFields": [
+    {
+      "id": "8c3a1d52-3b4e-4f7a-9c21-5d6e7f8a9b01",
+      "internalName": "CJ_Status",
+      "type": "Choice",
+      "title": "Státusz",
+      "group": "CopyJet",
+      "choices": ["Nyitott", "Folyamatban", "Lezárt"],
+      "defaultValue": "Nyitott",
+      "schemaXml": "<Field ID=\"{8c3a1d52-3b4e-4f7a-9c21-5d6e7f8a9b01}\" Name=\"CJ_Status\" StaticName=\"CJ_Status\" DisplayName=\"Státusz\" Type=\"Choice\" Group=\"CopyJet\"><CHOICES><CHOICE>Nyitott</CHOICE><CHOICE>Folyamatban</CHOICE><CHOICE>Lezárt</CHOICE></CHOICES><Default>Nyitott</Default></Field>"
+    },
+    {
+      "id": "1f2e3d4c-5b6a-4978-8a1b-2c3d4e5f6a7b",
+      "internalName": "CJ_Terulet",
+      "type": "TaxonomyFieldType",
+      "title": "Terület",
+      "group": "CopyJet",
+      "termSet": { "termSetId": "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d", "path": "Projekt/Terület", "isOpen": false },
+      "schemaXml": "<Field ID=\"{1f2e3d4c-5b6a-4978-8a1b-2c3d4e5f6a7b}\" Name=\"CJ_Terulet\" DisplayName=\"Terület\" Type=\"TaxonomyFieldType\" Group=\"CopyJet\" />"
+    }
+  ],
+  "contentTypes": [
+    {
+      "id": "0x0100A1B2C3D4E5F60718293A4B5C6D7E8F90",
+      "name": "Projekt",
+      "group": "CopyJet",
+      "parentId": "0x01",
+      "fieldRefs": [ { "internalName": "CJ_Status", "required": true }, { "internalName": "CJ_Terulet" } ]
+    }
+  ],
+  "lists": [
+    {
+      "key": "Ugyfelek",
+      "url": "Lists/Ugyfelek",
+      "title": "Ügyfelek",
+      "template": 100,
+      "onQuickLaunch": true,
+      "enableVersioning": true,
+      "fields": [],
+      "views": [ { "title": "Minden elem", "default": true, "fields": ["LinkTitle"], "rowLimit": 30, "paged": true } ],
+      "content": { "mode": "items", "itemCount": 35, "source": "items/Ugyfelek.json" }
+    },
+    {
+      "key": "Projektek",
+      "url": "Lists/Projektek",
+      "title": "Projektek",
+      "template": 100,
+      "onQuickLaunch": true,
+      "enableVersioning": true,
+      "contentTypesEnabled": true,
+      "contentTypes": ["Projekt"],
+      "fields": [
+        {
+          "internalName": "Ugyfel",
+          "type": "Lookup",
+          "title": "Ügyfél",
+          "lookupList": "{listkey:Ugyfelek}",
+          "lookupField": "Title",
+          "schemaXml": "<Field Name=\"Ugyfel\" DisplayName=\"Ügyfél\" Type=\"Lookup\" List=\"{listkey:Ugyfelek}\" ShowField=\"Title\" />"
+        },
+        {
+          "internalName": "Felelos",
+          "type": "User",
+          "title": "Felelős",
+          "schemaXml": "<Field Name=\"Felelos\" DisplayName=\"Felelős\" Type=\"User\" UserSelectionMode=\"PeopleOnly\" />"
+        }
+      ],
+      "views": [
+        { "title": "Minden elem", "default": true, "fields": ["LinkTitle", "CJ_Status", "Ugyfel", "Felelos"], "query": "<OrderBy><FieldRef Name=\"Modified\" Ascending=\"FALSE\" /></OrderBy>", "rowLimit": 30, "paged": true },
+        { "title": "Nyitott projektek", "fields": ["LinkTitle", "Ugyfel"], "query": "<Where><Eq><FieldRef Name=\"CJ_Status\" /><Value Type=\"Choice\">Nyitott</Value></Eq></Where>" }
+      ],
+      "security": { "breakInheritance": false },
+      "content": { "mode": "items", "itemCount": 42, "source": "items/Projektek.json" }
+    },
+    {
+      "key": "Dokumentumok",
+      "url": "Shared Documents",
+      "title": "Dokumentumok",
+      "template": 101,
+      "enableVersioning": true,
+      "majorVersionLimit": 500,
+      "folders": [ { "path": "2026" }, { "path": "2026/Q3" } ],
+      "views": [ { "title": "Minden dokumentum", "default": true, "fields": ["DocIcon", "LinkFilename", "Modified", "Editor"] } ],
+      "content": { "mode": "files", "sourceMode": "embedded", "includeVersions": false, "fileCount": 46, "sizeBytes": 88080384, "source": "files/Dokumentumok/" }
+    }
+  ],
+  "groups": [
+    {
+      "key": "PM",
+      "title": "{sitename} Projektmenedzserek",
+      "owner": "{associatedownergroup}",
+      "roles": ["Contribute"],
+      "includeMembers": false,
+      "members": []
+    }
+  ],
+  "pages": [
+    {
+      "name": "Home.aspx",
+      "title": "Kezdőlap",
+      "layout": "Home",
+      "isHomePage": true,
+      "source": "pages/Home.json",
+      "assets": ["assets/SiteAssets/fejlec.jpg"],
+      "requiredWebParts": [
+        { "id": "f92bf067-bc19-489e-a556-7fe95f508720", "title": "List", "isCustom": false }
+      ]
+    }
+  ],
+  "navigation": {
+    "mode": "append",
+    "quickLaunch": [
+      { "title": "Kezdőlap", "url": "{site}/SitePages/Home.aspx" },
+      { "title": "Projektek", "url": "{site}/Lists/Projektek", "children": [
+        { "title": "Nyitott projektek", "url": "{site}/Lists/Projektek/Nyitott projektek.aspx" }
+      ] },
+      { "title": "Dokumentumok", "url": "{site}/Shared Documents" },
+      { "title": "Céges portál", "url": "https://contoso.sharepoint.com", "isExternal": true }
+    ],
+    "topNavigation": []
+  },
+  "principals": [
+    { "key": "anna", "kind": "user", "loginName": "i:0#.f|membership|anna@contoso.com", "email": "anna@contoso.com", "upn": "anna@contoso.com", "displayName": "Kiss Anna" },
+    { "key": "peter", "kind": "user", "loginName": "i:0#.f|membership|peter.nagy@contoso.com", "email": "peter.nagy@contoso.com", "displayName": "Nagy Péter" }
+  ],
+  "terms": [
+    { "key": "t-penzugy", "termId": "b2c3d4e5-f6a7-4b8c-9d0e-1f2a3b4c5d6e", "termSetId": "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d", "label": "Pénzügy", "path": "Projekt/Terület/Pénzügy" }
+  ]
+}

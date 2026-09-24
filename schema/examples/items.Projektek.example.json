@@ -1,0 +1,33 @@
+{
+  "listKey": "Projektek",
+  "items": [
+    {
+      "sourceId": 1,
+      "contentType": "Projekt",
+      "values": {
+        "Title": "ERP bevezetés",
+        "CJ_Status": "Folyamatban",
+        "CJ_Terulet": { "terms": ["t-penzugy"] },
+        "Ugyfel": { "lookup": [7] },
+        "Felelos": { "principals": ["{principal:anna}"] }
+      },
+      "system": {
+        "author": "{principal:anna}",
+        "editor": "{principal:peter}",
+        "created": "2026-03-02T08:15:00Z",
+        "modified": "2026-09-20T14:02:00Z"
+      },
+      "attachments": ["attachments/Projektek/1/specifikacio.pdf"]
+    },
+    {
+      "sourceId": 2,
+      "contentType": "Projekt",
+      "values": {
+        "Title": "Webshop megújítás",
+        "CJ_Status": "Nyitott",
+        "Ugyfel": { "lookup": [3] },
+        "Felelos": null
+      }
+    }
+  ]
+}

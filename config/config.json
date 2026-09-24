@@ -1,0 +1,27 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/spfx-build/config.2.0.schema.json",
+  "version": "2.0",
+  "bundles": {
+    "copy-jet-setup-web-part": {
+      "components": [
+        {
+          "entrypoint": "./lib/webparts/copyJetSetup/CopyJetSetupWebPart.js",
+          "manifest": "./src/webparts/copyJetSetup/CopyJetSetupWebPart.manifest.json"
+        }
+      ]
+    },
+    "copy-jet-install-web-part": {
+      "components": [
+        {
+          "entrypoint": "./lib/webparts/copyJetInstall/CopyJetInstallWebPart.js",
+          "manifest": "./src/webparts/copyJetInstall/CopyJetInstallWebPart.manifest.json"
+        }
+      ]
+    }
+  },
+  "externals": {},
+  "localizedResources": {
+    "CopyJetSetupWebPartStrings": "lib/webparts/copyJetSetup/loc/{locale}.js",
+    "CopyJetInstallWebPartStrings": "lib/webparts/copyJetInstall/loc/{locale}.js"
+  }
+}

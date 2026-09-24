@@ -1,0 +1,66 @@
+import type { SPFI } from '@pnp/sp';
+import type { ArtifactKind, IArtifactRef, IDiscoveredArtifact } from './artifacts';
+import type { ICopyJetTemplate } from './generated/copyjet.v1';
+
+/** Receives extracted data; hides the package format (.json / .zip) from the extractors. */
+export interface ITemplateWriter {
+  /** The manifest being built; extractors append their definitions to it. */
+  readonly manifest: ICopyJetTemplate;
+  /** Adds a JSON entry to the package (e.g. items/<listkey>.json). */
+  addJson(path: string, value: unknown): void;
+  /** Adds a binary entry to the package (e.g. files/<listkey>/<path>). */
+  addBlob(path: string, blob: Blob): void;
+  /** Validates the manifest and produces the downloadable template. */
+  finalize(signal?: AbortSignal): Promise<Blob>;
+}
+
+/** Read access to a loaded template package; entries are loaded lazily. */
+export interface ITemplateReader {
+  readonly manifest: ICopyJetTemplate;
+  has(path: string): boolean;
+  getJson<T>(path: string, signal?: AbortSignal): Promise<T>;
+  getBlob(path: string, signal?: AbortSignal): Promise<Blob>;
+}
+
+export interface IExtractOptions {
+  includeContent: boolean;
+  includeVersions: boolean;
+  includeMembers: boolean;
+  signal?: AbortSignal;
+}
+
+export interface IExtractor<TDef> {
+  kind: ArtifactKind;
+  discover(sp: SPFI, signal?: AbortSignal): Promise<IDiscoveredArtifact[]>;
+  /** Artifacts that must also be included for this definition to install. */
+  dependencies(def: TDef): IArtifactRef[];
+  extract(sp: SPFI, refs: IArtifactRef[], opts: IExtractOptions, out: ITemplateWriter): Promise<void>;
+}
+
+export type DiffStatus = 'new' | 'same' | 'different' | 'unsupported';
+export type ConflictMode = 'skip' | 'update' | 'rename';
+
+export interface IDiffResult {
+  ref: IArtifactRef;
+  status: DiffStatus;
+  /** Human-readable differences for the preview (property names, not localized text). */
+  changes?: string[];
+}
+
+export interface IApplyResult {
+  ref: IArtifactRef;
+  outcome: 'created' | 'updated' | 'skipped';
+  /** Created identifiers to register as tokens, e.g. { listkey: { Projektek: '<guid>' } }. */
+  tokens?: Record<string, Record<string, string>>;
+}
+
+export interface IInstallContext {
+  targetSiteUrl: string;
+  signal?: AbortSignal;
+}
+
+export interface IProvider<TDef> {
+  kind: ArtifactKind;
+  diff(sp: SPFI, def: TDef, ctx: IInstallContext): Promise<IDiffResult>;
+  apply(sp: SPFI, def: TDef, mode: ConflictMode, ctx: IInstallContext): Promise<IApplyResult>;
+}
