@@ -7,6 +7,7 @@ import {
   listKeyFromUrl,
   listUpdateProps,
   loadSourceSite,
+  missingFolders,
   toSiteRelativeUrl,
   type IListInfoLike
 } from '../../src/core/lists';
@@ -16,48 +17,125 @@ import { JsonTemplateWriter, createEmptyTemplate } from '../../src/core/packager
 import { validateTemplate } from '../../src/core/schema';
 import { TokenContext } from '../../src/core/tokenizer';
 import { createMockSp, type IMockRequest } from '../helpers/mockSp';
-import { SOURCE_WEB, documents, lookupForras, sourceLists, systemLists, tesztLista } from '../fixtures/lists';
+import { PROJEKT_SITE_CT, SOURCE_WEB, documents, lookupForras, sourceFolders, sourceListCts, sourceLists, systemLists, tesztLista } from '../fixtures/lists';
 
 const TARGET_WEB = '/sites/Cel';
 
-function sourceSp(): ReturnType<typeof createMockSp> {
-  return createMockSp((req) => {
-    if (req.method !== 'GET') return undefined;
-    if (/\/_api\/web\/lists\?/i.test(req.url)) return { body: sourceLists };
-    if (/\/_api\/web\?\$select=/i.test(req.url)) return { body: SOURCE_WEB };
-    return undefined;
-  }, SOURCE_WEB.Url);
+interface ISiteState {
+  web: { Url: string; ServerRelativeUrl: string; Title: string };
+  lists: IListInfoLike[];
+  /** Folder paths per list URL, relative to the list root. */
+  folders: { [listUrl: string]: string[] };
+  cts: { [listUrl: string]: { ordered: string[]; all: string[] } };
+  /** Site content types that can be added to lists. */
+  siteCts: string[];
 }
 
-/** In-memory target web; lists are keyed by server-relative URL, created the way SharePoint does (spike 03). */
-function targetSite(initial: IListInfoLike[] = []): { sp: ReturnType<typeof createMockSp>['sp']; lists: IListInfoLike[]; requests: IMockRequest[] } {
-  const lists = initial.map((l) => ({ ...l, RootFolder: { ServerRelativeUrl: l.RootFolder.ServerRelativeUrl.replace('/sites/Forras', TARGET_WEB) } }));
+const guid32 = (n: number): string => n.toString(16).toUpperCase().padStart(32, '0');
+
+/**
+ * In-memory SharePoint web covering the list REST calls CopyJet makes. Behaviour follows spikes 03/04:
+ * missing list = 404, new list gets its URL from the title, nested folders need existing parents.
+ */
+function fakeSite(state: ISiteState): { sp: ReturnType<typeof createMockSp>['sp']; requests: IMockRequest[]; fetch: (url: string, init: RequestInit) => Promise<Response> } {
   let seq = 0;
+  const findList = (url: string): IListInfoLike | undefined => state.lists.find((l) => l.RootFolder.ServerRelativeUrl.toLowerCase() === url.toLowerCase());
+  const listOfPath = (path: string): string | undefined =>
+    state.lists.map((l) => l.RootFolder.ServerRelativeUrl).filter((u) => path === u || path.indexOf(u + '/') === 0)[0];
+
   const { sp, requests } = createMockSp((req) => {
-    const byUrl = /\/getList\('([^']+)'\)/i.exec(req.url);
-    const find = (url: string): IListInfoLike | undefined => lists.find((l) => l.RootFolder.ServerRelativeUrl.toLowerCase() === url.toLowerCase());
-    if (req.method === 'GET' && byUrl) {
-      const l = find(byUrl[1]);
+    let m: RegExpExecArray | null;
+    if (req.method === 'POST' && /\/_api\/contextinfo$/i.test(req.url)) {
+      return { body: { FormDigestValue: 'digest', WebFullUrl: state.web.Url } };
+    }
+    if (req.method === 'GET' && /\/_api\/web\?\$select=/i.test(req.url)) return { body: state.web };
+    if (req.method === 'GET' && /\/_api\/web\/lists\?\$select=/i.test(req.url)) return { body: state.lists };
+    if ((m = /\/getFolderByServerRelativePath\(decodedUrl='([^']+)'\)\/folders/i.exec(req.url))) {
+      const path = m[1];
+      const listUrl = listOfPath(path)!;
+      const rel = path === listUrl ? '' : path.slice(listUrl.length + 1);
+      const children = (state.folders[listUrl] || []).filter((f) => (rel ? f.indexOf(rel + '/') === 0 && f.split('/').length === rel.split('/').length + 1 : f.indexOf('/') < 0));
+      return { body: children.map((f) => ({ Name: f.split('/').pop() })) };
+    }
+    if (req.method === 'POST' && (m = /\/folders\/addUsingPath\(DecodedUrl='([^']+)'/i.exec(req.url))) {
+      const path = m[1];
+      const listUrl = listOfPath(path)!;
+      const rel = path.slice(listUrl.length + 1);
+      const parent = rel.split('/').slice(0, -1).join('/');
+      const folders = (state.folders[listUrl] = state.folders[listUrl] || []);
+      if (parent && folders.indexOf(parent) < 0) return { status: 500, body: { 'odata.error': { message: { value: `"${path}" nem található.` } } } };
+      if (folders.indexOf(rel) < 0) folders.push(rel);
+      return { body: { Name: rel.split('/').pop() } };
+    }
+    if ((m = /\/getList\('([^']+)'\)\/rootFolder\?/i.exec(req.url))) {
+      return { body: { ContentTypeOrder: ((state.cts[m[1]] || { ordered: [] }).ordered).map((StringValue) => ({ StringValue })) } };
+    }
+    if (req.method === 'GET' && (m = /\/getList\('([^']+)'\)\/contentTypes\?/i.exec(req.url))) {
+      return { body: ((state.cts[m[1]] || { all: [] }).all).map((StringId) => ({ StringId })) };
+    }
+    if (req.method === 'POST' && (m = /\/getList\('([^']+)'\)\/contentTypes\/addAvailableContentType\('([^']+)'\)$/i.exec(req.url))) {
+      if (state.siteCts.indexOf(m[2]) < 0) return { status: 500, body: { 'odata.error': { message: { value: `A tartalomtípus nem található (azonosító: '${m[2]}').` } } } };
+      const listCt = `${m[2]}00${guid32(++seq)}`;
+      const cts = (state.cts[m[1]] = state.cts[m[1]] || { ordered: [], all: [] });
+      cts.all.push(listCt);
+      cts.ordered.push(listCt);
+      return { body: { StringId: listCt } };
+    }
+    if ((m = /\/getList\('([^']+)'\)(\?|$)/i.exec(req.url))) {
+      const l = findList(m[1]);
+      if (req.method === 'POST') {
+        Object.assign(l!, req.body);
+        return { status: 204 };
+      }
       return l ? { body: l } : { status: 404, body: { 'odata.error': { message: { value: 'A fájl nem található.' } } } };
     }
-    if (req.method === 'POST' && byUrl) {
-      Object.assign(find(byUrl[1])!, req.body);
-      return { status: 204 };
-    }
-    const byTitle = /\/lists\?\$filter=Title eq '([^']+)'/i.exec(req.url);
-    if (req.method === 'GET' && byTitle) {
-      return { body: lists.filter((l) => l.Title === byTitle[1]).map((l) => ({ Id: l.Id })) };
+    if (req.method === 'GET' && (m = /\/lists\?\$filter=Title eq '([^']+)'/i.exec(req.url))) {
+      return { body: state.lists.filter((l) => l.Title === m![1]).map((l) => ({ Id: l.Id })) };
     }
     if (req.method === 'POST' && /\/_api\/web\/lists$/i.test(req.url)) {
       const b = req.body as { Title: string; BaseTemplate: number };
-      const url = b.BaseTemplate === 101 ? `${TARGET_WEB}/${b.Title}` : `${TARGET_WEB}/Lists/${b.Title}`;
+      const url = b.BaseTemplate === 101 ? `${state.web.ServerRelativeUrl}/${b.Title}` : `${state.web.ServerRelativeUrl}/Lists/${b.Title}`;
       const created: IListInfoLike = { Id: `33333333-0000-4000-8000-${String(++seq).padStart(12, '0')}`, Title: b.Title, BaseTemplate: b.BaseTemplate, RootFolder: { ServerRelativeUrl: url } };
-      lists.push(created);
+      state.lists.push(created);
+      state.folders[url] = [b.BaseTemplate === 101 ? 'Forms' : 'Attachments'];
+      const def = `${b.BaseTemplate === 101 ? '0x0101' : '0x01'}00${guid32(++seq)}`;
+      state.cts[url] = { ordered: [def], all: [def, `0x012000${guid32(++seq)}`] };
       return { body: created };
     }
     return undefined;
+  }, state.web.Url);
+
+  // Raw REST (spike 04): MERGE UniqueContentTypeOrder on a list's root folder, odata=verbose.
+  const rawFetch = async (url: string, init: RequestInit): Promise<Response> => {
+    const m = /\/getList\('([^']+)'\)\/RootFolder$/i.exec(decodeURIComponent(url));
+    expect(m).not.toBeNull();
+    expect((init.headers as Record<string, string>)['Content-Type']).toBe('application/json;odata=verbose');
+    const ids = (JSON.parse(String(init.body)) as { UniqueContentTypeOrder: { results: Array<{ StringValue: string }> } }).UniqueContentTypeOrder.results.map((r) => r.StringValue);
+    state.cts[m![1]].ordered = ids;
+    return new Response(null, { status: 204 });
+  };
+  return { sp, requests, fetch: rawFetch };
+}
+
+function sourceSp(): ReturnType<typeof fakeSite> {
+  return fakeSite({ web: SOURCE_WEB, lists: sourceLists, folders: sourceFolders, cts: sourceListCts, siteCts: [] });
+}
+
+/** Target web; `initial` lists are taken from the source fixtures and moved to the target URL. */
+function targetSite(initial: IListInfoLike[] = []): ReturnType<typeof fakeSite> & { lists: IListInfoLike[]; state: ISiteState } {
+  const state: ISiteState = {
+    web: { Url: `https://fabrikam.sharepoint.com${TARGET_WEB}`, ServerRelativeUrl: TARGET_WEB, Title: 'Cél' },
+    lists: initial.map((l) => ({ ...l, RootFolder: { ServerRelativeUrl: l.RootFolder.ServerRelativeUrl.replace('/sites/Forras', TARGET_WEB) } })),
+    folders: {},
+    cts: {},
+    siteCts: ['0x01', '0x0101', PROJEKT_SITE_CT]
+  };
+  state.lists.forEach((l) => {
+    state.folders[l.RootFolder.ServerRelativeUrl] = [];
+    const def = `${l.BaseTemplate === 101 ? '0x0101' : '0x01'}00${'D'.repeat(32)}`;
+    state.cts[l.RootFolder.ServerRelativeUrl] = { ordered: [def], all: [def] };
   });
-  return { sp, lists, requests };
+  return { ...fakeSite(state), lists: state.lists, state };
 }
 
 function ctx(): IInstallContext {
@@ -147,6 +225,66 @@ describe('ListExtractor', () => {
   });
 });
 
+describe('list structure (content types, folders)', () => {
+  it('extracts site-level content type IDs (default first) and user folders only', async () => {
+    const { lists } = await extractAll();
+    const teszt = lists.find((l) => l.key === 'Teszt_lista')!;
+    expect(teszt.contentTypes).toEqual([PROJEKT_SITE_CT, '0x01']);
+    expect(teszt.folders).toEqual([{ path: 'Mappa' }]);
+    expect(lists.find((l) => l.key === 'Shared_Documents')!.folders).toEqual([{ path: '2026' }, { path: '2026/Q3' }]);
+    // Content types are only recorded when the list has them enabled.
+    expect(lists.find((l) => l.key === 'Teszt_lookup_forrs')!.contentTypes).toBeUndefined();
+  });
+
+  it('computes missing folders parent-first', () => {
+    expect(missingFolders(['a/b/c', 'x'], ['a'])).toEqual(['x', 'a/b', 'a/b/c']);
+    expect(missingFolders(['A/b'], ['a', 'a/B'])).toEqual([]);
+  });
+
+  it('creates a list with its content types in template order (first = default) and its folders', async () => {
+    const { lists } = await extractAll();
+    const target = targetSite();
+    const provider = new ListProvider(target.fetch);
+    const c = ctx();
+    expect(await provider.apply(target.sp, lists.find((l) => l.key === 'Teszt_lista')!, 'skip', c)).toMatchObject({ outcome: 'created' });
+
+    const url = '/sites/Cel/Lists/Teszt lista';
+    const cts = target.state.cts[url];
+    expect(cts.ordered.map((id) => id.slice(0, -34))).toEqual([PROJEKT_SITE_CT, '0x01']);
+    expect(cts.all).toHaveLength(3); // Item, Folder (hidden), Projekt – nothing removed
+    expect(target.state.folders[url]).toEqual(['Attachments', 'Mappa']);
+    expect((await provider.diff(target.sp, lists.find((l) => l.key === 'Teszt_lista')!, c)).status).toBe('same');
+  });
+
+  it('diff reports a missing content type and a wrong default; update adds and reorders without removing', async () => {
+    const { lists } = await extractAll();
+    const teszt = lists.find((l) => l.key === 'Teszt_lista')!;
+    const target = targetSite([{ ...tesztLista }]);
+    const provider = new ListProvider(target.fetch);
+    const c = ctx();
+    const url = '/sites/Cel/Lists/Teszt lista';
+    target.state.cts[url].all.push('0x0104007B48E5823A4D6E4C8C5BF88502FD1CDA');
+    target.state.cts[url].ordered.push('0x0104007B48E5823A4D6E4C8C5BF88502FD1CDA');
+
+    expect(await provider.diff(target.sp, teszt, c)).toMatchObject({ status: 'different', changes: ['contentTypes', 'folders'] });
+    expect(await provider.apply(target.sp, teszt, 'update', c)).toMatchObject({ outcome: 'updated' });
+    expect(target.state.cts[url].ordered.map((id) => id.slice(0, -34))).toEqual([PROJEKT_SITE_CT, '0x01', '0x0104']);
+
+    // Only the default differs now.
+    target.state.cts[url].ordered.reverse();
+    expect(await provider.diff(target.sp, teszt, c)).toMatchObject({ status: 'different', changes: ['contentTypeOrder'] });
+  });
+
+  it('fails with LIST_CT_FAILED when a content type is missing from the target site', async () => {
+    const { lists } = await extractAll();
+    const target = targetSite();
+    target.state.siteCts = ['0x01', '0x0101'];
+    await expect(new ListProvider(target.fetch).apply(target.sp, lists.find((l) => l.key === 'Teszt_lista')!, 'skip', ctx())).rejects.toMatchObject({
+      code: 'LIST_CT_FAILED'
+    });
+  });
+});
+
 describe('ListProvider', () => {
   const provider = new ListProvider();
 
@@ -183,11 +321,13 @@ describe('ListProvider', () => {
     const { lists } = await extractAll();
     const target = targetSite([{ ...documents, EnableVersioning: false, MajorVersionLimit: 0, OnQuickLaunch: true }]);
     const c = ctx();
-    expect(await provider.diff(target.sp, lists[0], c)).toMatchObject({ status: 'different', changes: ['enableVersioning', 'majorVersionLimit'] });
+    expect(await provider.diff(target.sp, lists[0], c)).toMatchObject({ status: 'different', changes: ['enableVersioning', 'majorVersionLimit', 'folders'] });
     expect(await provider.apply(target.sp, lists[0], 'skip', c)).toMatchObject({ outcome: 'skipped' });
     expect(target.lists[0].EnableVersioning).toBe(false);
+    expect(target.state.folders['/sites/Cel/Shared Documents']).toEqual([]);
     expect(await provider.apply(target.sp, lists[0], 'update', c)).toMatchObject({ outcome: 'updated' });
-    expect(target.requests.filter((r) => r.method === 'POST').pop()!.body).toEqual({ EnableVersioning: true, MajorVersionLimit: 500 });
+    expect(target.requests.find((r) => r.method === 'POST' && /\/getList\('[^']+'\)$/.test(r.url))!.body).toEqual({ EnableVersioning: true, MajorVersionLimit: 500 });
+    expect(target.state.folders['/sites/Cel/Shared Documents']).toEqual(['2026', '2026/Q3']);
     expect(c.tokens.get('listkey', 'Shared_Documents')).toBe(documents.Id);
   });
 
@@ -195,7 +335,7 @@ describe('ListProvider', () => {
     const { lists } = await extractAll();
     const target = targetSite([{ ...tesztLista, Title: 'Teszt lista', EnableAttachments: false }]);
     const c = ctx();
-    expect(await provider.apply(target.sp, lists[1], 'rename', c)).toMatchObject({ outcome: 'created' });
+    expect(await new ListProvider(target.fetch).apply(target.sp, lists[1], 'rename', c)).toMatchObject({ outcome: 'created' });
     const copy = target.lists[1];
     expect(copy).toMatchObject({ Title: 'Teszt lista (copy)', RootFolder: { ServerRelativeUrl: '/sites/Cel/Lists/Teszt lista_copy' } });
     expect(c.tokens.get('listkey', 'Teszt_lista')).toBe(copy.Id);

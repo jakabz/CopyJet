@@ -6,4 +6,5 @@ export * from './batch';
 export * from './probe';
 export * from './status';
 export * from './csomXml';
+export * from './raw';
 export * from './csom';

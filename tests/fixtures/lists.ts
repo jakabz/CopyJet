@@ -27,7 +27,7 @@ export const tesztLista = list('11111111-0000-4000-8000-000000000003', 'Teszt li
   EnableAttachments: true,
   EnableVersioning: true,
   MajorVersionLimit: 50,
-  ContentTypesEnabled: false
+  ContentTypesEnabled: true
 });
 // SharePoint dropped the "á" from the URL.
 export const lookupForras = list('11111111-0000-4000-8000-000000000004', 'Teszt lookup forrás', 'Lists/Teszt lookup forrs', 100, { ItemCount: 7, EnableAttachments: true });
@@ -42,3 +42,16 @@ export const systemLists: IListInfoLike[] = [
 
 export const sourceLists: IListInfoLike[] = [documents, events, ...systemLists, tesztLista, lookupForras];
 export const SOURCE_WEB = { Url: 'https://contoso.sharepoint.com/sites/Forras', ServerRelativeUrl: WEB, Title: 'Forrás' };
+
+// Structure of the source lists: folders (relative to the list root, incl. system ones) and list content types.
+export const PROJEKT_SITE_CT = '0x0100A1B2C3D4E5F60718293A4B5C6D7E8F90';
+export const sourceFolders: { [listUrl: string]: string[] } = {
+  '/sites/Forras/Shared Documents': ['Forms', '2026', '2026/Q3'],
+  '/sites/Forras/Lists/Teszt lista': ['Attachments', 'Mappa']
+};
+export const sourceListCts: { [listUrl: string]: { ordered: string[]; all: string[] } } = {
+  '/sites/Forras/Lists/Teszt lista': {
+    ordered: [`${PROJEKT_SITE_CT}00AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA`, '0x0100BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB'],
+    all: ['0x0100BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB', `${PROJEKT_SITE_CT}00AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA`, '0x012000CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC']
+  }
+};

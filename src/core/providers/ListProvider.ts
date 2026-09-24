@@ -1,7 +1,11 @@
-import type { SPFI } from '@pnp/sp';
+import { spPost, type SPFI } from '@pnp/sp';
 import '@pnp/sp/webs';
 import '@pnp/sp/lists';
+import '@pnp/sp/folders';
+import { ContentTypes } from '@pnp/sp/content-types';
+import { normalizeContentTypeId } from '../contentTypes';
 import { CopyJetError, throwIfAborted } from '../errors';
+import { setContentTypeOrder, type FetchLike } from '../http/raw';
 import { isHttpStatus } from '../http/status';
 import {
   CUSTOM_LIST,
@@ -9,7 +13,12 @@ import {
   LIST_SELECT,
   compareLists,
   isSupportedTemplate,
+  listContentTypeFor,
+  listFolderPaths,
   listUpdateProps,
+  missingFolders,
+  readListContentTypes,
+  siteContentTypeIdOf,
   toServerRelativeUrl,
   urlLeaf,
   type IListInfoLike
@@ -29,8 +38,17 @@ function creatableUrl(template: number, leaf: string): string | undefined {
   return undefined;
 }
 
+/** Additive structure changes 'update' mode (and creation) apply; see _syncStructure. */
+const STRUCTURE_CHANGES = ['contentTypes', 'contentTypeOrder', 'folders'];
+
 export class ListProvider implements IProvider<IList> {
   public readonly kind = 'list' as const;
+  private readonly _fetch?: FetchLike;
+
+  /** `fetchImpl` is used for the raw REST call that sets the content type order (injected in tests). */
+  constructor(fetchImpl?: FetchLike) {
+    this._fetch = fetchImpl;
+  }
 
   public async diff(sp: SPFI, def: IList, ctx: IInstallContext): Promise<IListDiff> {
     throwIfAborted(ctx.signal);
@@ -56,6 +74,7 @@ export class ListProvider implements IProvider<IList> {
     if (changes.indexOf('template') >= 0) {
       return { ref, status: 'unsupported', changes: ['template'], target };
     }
+    changes.push(...(await this._structureChanges(sp, def, target.RootFolder.ServerRelativeUrl)));
     return { ref, status: changes.length ? 'different' : 'same', changes: changes.length ? changes : undefined, target };
   }
 
@@ -72,7 +91,11 @@ export class ListProvider implements IProvider<IList> {
         return this._done(ref, 'skipped', def, diff.target!, ctx);
       case 'different':
         if (mode === 'update') {
-          await sp.web.getList(this._serverUrl(def.url, ctx)).update(listUpdateProps(def, diff.changes));
+          const settings = (diff.changes || []).filter((c) => STRUCTURE_CHANGES.indexOf(c) < 0);
+          if (settings.length) {
+            await sp.web.getList(this._serverUrl(def.url, ctx)).update(listUpdateProps(def, settings));
+          }
+          await this._syncStructure(sp, def, diff.target!.RootFolder.ServerRelativeUrl, ctx);
           ctx.log.info(`List updated: ${(diff.changes || []).join(', ')}.`, { artifact: ref });
           return this._done(ref, 'updated', def, diff.target!, ctx);
         }
@@ -116,8 +139,73 @@ export class ListProvider implements IProvider<IList> {
       throw new CopyJetError('LIST_URL_MISMATCH', `List ${title} was not created at ${url}.`, { url });
     }
     await sp.web.getList(this._serverUrl(url, ctx)).update(listUpdateProps({ ...def, title }));
+    await this._syncStructure(sp, def, created.RootFolder.ServerRelativeUrl, ctx);
     ctx.log.info(url === def.url ? 'List created.' : `List created as a renamed copy at ${url}.`, { artifact: ref });
     return this._done(ref, 'created', { ...def, url }, created, ctx);
+  }
+
+  /** Content types missing from the list, a different order (first = default), missing folders. */
+  private async _structureChanges(sp: SPFI, def: IList, listUrl: string): Promise<string[]> {
+    const changes: string[] = [];
+    if (def.contentTypes && def.contentTypes.length) {
+      const cts = await readListContentTypes(sp, listUrl);
+      if (def.contentTypes.some((id) => !listContentTypeFor(id, cts.all))) {
+        changes.push('contentTypes');
+      } else if (!this._orderMatches(def.contentTypes, cts.ordered)) {
+        changes.push('contentTypeOrder');
+      }
+    }
+    if (def.folders && def.folders.length) {
+      const existing = await listFolderPaths(sp, listUrl);
+      if (missingFolders(def.folders.map((f) => f.path), existing).length) {
+        changes.push('folders');
+      }
+    }
+    return changes;
+  }
+
+  /** The template's content types lead the target's visible order, in the same sequence. */
+  private _orderMatches(siteIds: string[], orderedListIds: string[]): boolean {
+    return siteIds.every((id, i) => orderedListIds[i] !== undefined && siteContentTypeIdOf(orderedListIds[i]) === normalizeContentTypeId(id));
+  }
+
+  /**
+   * Adds missing content types, puts the template's ones first (first = default), creates missing folders
+   * parent-first. Never removes a content type or folder (spike 04).
+   */
+  private async _syncStructure(sp: SPFI, def: IList, listUrl: string, ctx: IInstallContext): Promise<void> {
+    const ref = { kind: this.kind, key: `list:${def.key}` };
+    if (def.contentTypes && def.contentTypes.length) {
+      const list = sp.web.getList(listUrl);
+      const before = await readListContentTypes(sp, listUrl);
+      for (const siteId of def.contentTypes) {
+        throwIfAborted(ctx.signal);
+        if (!listContentTypeFor(siteId, before.all)) {
+          try {
+            // URL-parameter form, as verified in spike 04 (PnPjs' helper posts the ID in a body instead).
+            await spPost(ContentTypes(list.contentTypes, `addAvailableContentType('${normalizeContentTypeId(siteId)}')`));
+          } catch (e) {
+            throw new CopyJetError('LIST_CT_FAILED', `Could not add content type ${siteId} to list ${def.url}; is it installed on the site?`, e);
+          }
+        }
+      }
+      const cts = await readListContentTypes(sp, listUrl);
+      if (!this._orderMatches(def.contentTypes, cts.ordered)) {
+        const lead = def.contentTypes.map((id) => listContentTypeFor(id, cts.all)!).filter((id) => !!id);
+        const rest = cts.ordered.filter((id) => lead.indexOf(id) < 0);
+        await setContentTypeOrder(sp, listUrl, lead.concat(rest), ctx.signal, this._fetch);
+      }
+    }
+    if (def.folders && def.folders.length) {
+      const create = missingFolders(def.folders.map((f) => f.path), await listFolderPaths(sp, listUrl, ctx.signal));
+      for (const path of create) {
+        throwIfAborted(ctx.signal);
+        await sp.web.folders.addUsingPath(`${listUrl}/${path}`);
+      }
+      if (create.length) {
+        ctx.log.info(`Folders created: ${create.length}.`, { artifact: ref });
+      }
+    }
   }
 
   private _serverUrl(siteRelativeUrl: string, ctx: IInstallContext): string {
