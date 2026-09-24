@@ -19,7 +19,12 @@ export default class CopyJetSetupWebPart extends BaseClientSideWebPart<ICopyJetS
   }
 
   public render(): void {
-    const element: React.ReactElement<ICopyJetSetupProps> = React.createElement(CopyJetSetup, { sp: this._sp });
+    const user = this.context.pageContext.user;
+    const element: React.ReactElement<ICopyJetSetupProps> = React.createElement(CopyJetSetup, {
+      sp: this._sp,
+      siteTitle: this.context.pageContext.web.title,
+      createdBy: user.email || user.loginName
+    });
     ReactDom.render(element, this.domElement);
   }
 

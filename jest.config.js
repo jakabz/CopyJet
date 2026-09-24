@@ -9,5 +9,6 @@ module.exports = {
     '^.+\\.(ts|tsx|js)$': ['ts-jest', { tsconfig: '<rootDir>/tsconfig.jest.json' }]
   },
   transformIgnorePatterns: ['/node_modules/(?!@pnp/)'],
-  moduleFileExtensions: ['ts', 'tsx', 'js', 'json']
+  moduleFileExtensions: ['ts', 'tsx', 'js', 'json'],
+  setupFiles: ['<rootDir>/tests/setup/dom.ts']
 };

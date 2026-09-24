@@ -40,3 +40,8 @@ registerToken({ name: 'listkey', hasArgument: true, kind: 'guid', autoTokenize: 
 // Site-relative list URL (e.g. Lists/Projektek); absolute list URLs are already covered by {site}.
 registerToken({ name: 'listurl', hasArgument: true, kind: 'text', autoTokenize: false });
 registerToken({ name: 'fieldid', hasArgument: true, kind: 'guid', autoTokenize: true });
+// SharePoint groups: values are group IDs on the target. Never auto-tokenized (plain numbers).
+registerToken({ name: 'groupkey', hasArgument: true, kind: 'text', autoTokenize: false });
+registerToken({ name: 'associatedownergroup', hasArgument: false, kind: 'text', autoTokenize: false });
+registerToken({ name: 'associatedmembergroup', hasArgument: false, kind: 'text', autoTokenize: false });
+registerToken({ name: 'associatedvisitorgroup', hasArgument: false, kind: 'text', autoTokenize: false });

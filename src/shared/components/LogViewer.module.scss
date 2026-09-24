@@ -1,0 +1,43 @@
+.title {
+  font-weight: 600;
+  margin-right: auto;
+}
+
+.log {
+  max-height: 260px;
+  overflow-y: auto;
+  font-family: Consolas, "Courier New", monospace;
+  font-size: 12px;
+  border: 1px solid "[theme:neutralLight, default: #edebe9]";
+  padding: 6px 8px;
+
+  > div {
+    display: flex;
+    gap: 8px;
+    padding: 1px 0;
+  }
+}
+
+.time {
+  color: "[theme:neutralSecondary, default: #605e5c]";
+}
+
+.level {
+  min-width: 70px;
+}
+
+.info {
+  color: inherit;
+}
+
+.warn .level {
+  color: "[theme:warningText, default: #8a6d3b]";
+}
+
+.error {
+  color: "[theme:errorText, default: #a4262c]";
+}
+
+.empty {
+  color: "[theme:neutralSecondary, default: #605e5c]";
+}

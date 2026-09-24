@@ -24,6 +24,10 @@ export interface IDiscoveredArtifact {
   title: string;
   /** Parent artifact key for tree grouping (e.g. a view under its list). */
   parentKey?: string;
+  /** Display grouping on the source site (e.g. site column group). */
+  group?: string;
   itemCount?: number;
   sizeBytes?: number;
+  /** Set when CopyJet cannot copy the artifact (reason code, e.g. 'LIST_TEMPLATE_UNSUPPORTED'); shown disabled. */
+  unsupported?: string;
 }
