@@ -427,8 +427,8 @@ A fejlesztés a rendszerterv fázisait követi; minden fázis végén működő,
 
 - [x] Extractor + provider: site column, tartalomtípus, lista/tár, lista mező, nézet, SP-csoport
 - [x] `planner` és `engine` (folytatás nélkül)
-- [ ] Setup: `ArtifactTree`, `ArtifactOptionsPanel`, `DependencyDialog`, export
-- [ ] Install: `TemplateLoader`, `PreviewStep`, `InstallStep`, `ResultStep`
+- [x] Setup: `ArtifactTree`, `ArtifactOptionsPanel`, `DependencyDialog`, export – a tételenkénti opciók (tartalom, verziók, tagok) a 2. fázisban, a tartalommal együtt kerülnek a felületre; a hiányzó függőségeket az Export lépés ajánlja fel
+- [x] Install: `TemplateLoader`, `PreviewStep`, `InstallStep`, `ResultStep` – első valódi Forrás → Cél telepítés 2026-09-24-én: hibátlan, újrafuttatva minden elem „már megvan” (a sablontárból / URL-ről betöltés később)
 
 **2. fázis – Tartalom**
 
