@@ -51,8 +51,11 @@ function node(kind: ArtifactKind, key: string, def: StepDef, deps: IArtifactRef[
   return { ref: { kind, key }, def, deps: deps.map((d) => d.key) };
 }
 
-/** Every artifact of the template as a plan node with its (unfiltered) dependencies. */
-function nodesOf(template: ICopyJetTemplate): Array<{ ref: IArtifactRef; def: StepDef; deps: string[] }> {
+/**
+ * Every artifact of the template with its unfiltered dependencies (they may point outside the template –
+ * the Setup uses them to offer missing dependencies, the planner keeps only in-template edges).
+ */
+export function templateNodes(template: ICopyJetTemplate): Array<{ ref: IArtifactRef; def: StepDef; deps: string[] }> {
   return [
     ...template.groups.map((g) => node('group', artifactKeys.group(g.key), g, groupDependencies(g))),
     ...template.siteFields.map((f) => node('siteField', artifactKeys.siteField(f.internalName), f, siteFieldDependencies(f))),
@@ -73,7 +76,7 @@ const byKindThenKey = (a: { ref: IArtifactRef }, b: { ref: IArtifactRef }): numb
  * in a cycle are excluded rather than guessed at.
  */
 export function buildPlan(template: ICopyJetTemplate, options: IPlanOptions = {}): IPlan {
-  const all = nodesOf(template);
+  const all = templateNodes(template);
   const known: { [key: string]: boolean } = {};
   all.forEach((n) => (known[n.ref.key] = true));
   all.forEach((n) => (n.deps = n.deps.filter((d, i, arr) => known[d] && d !== n.ref.key && arr.indexOf(d) === i)));

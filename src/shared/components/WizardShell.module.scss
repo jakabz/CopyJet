@@ -1,0 +1,50 @@
+.shell {
+  padding: 1em;
+  color: "[theme:bodyText, default: #323130]";
+  color: var(--bodyText);
+}
+
+.steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+
+  li {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+}
+
+.number {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  font-size: 12px;
+  border: 1px solid "[theme:neutralTertiary, default: #a19f9d]";
+}
+
+.current {
+  font-weight: 600;
+
+  .number {
+    background: "[theme:themePrimary, default: #0078d4]";
+    border-color: "[theme:themePrimary, default: #0078d4]";
+    color: "[theme:white, default: #ffffff]";
+  }
+}
+
+.done .number {
+  border-color: "[theme:themePrimary, default: #0078d4]";
+  color: "[theme:themePrimary, default: #0078d4]";
+}
+
+.todo {
+  color: "[theme:neutralSecondary, default: #605e5c]";
+}
