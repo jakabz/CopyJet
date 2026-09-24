@@ -222,7 +222,7 @@ export interface IExtractor<TDef> {
 | Extractor | Mit olvas | Megoldás / API |
 | --- | --- | --- |
 | `SiteFieldExtractor` | Egyedi site columnok | `web.fields.filter("Hidden eq false")` + kliensoldali szűrés a `SchemaXml` `SourceID`-ja szerint (GUID = egyedi; lásd `docs/spikes/01`), `SchemaXml` szűrve és tokenizálva |
-| `ContentTypeExtractor` | Egyedi tartalomtípusok, mezőhivatkozások | `web.contentTypes` + `fieldLinks`; szülőlánc az ID prefixből |
+| `ContentTypeExtractor` | Egyedi tartalomtípusok, mezőhivatkozások | `web.contentTypes` + `fieldLinks`; egyedi = nincs `FeatureId` a `SchemaXml`-ben (és nem a modern lapok beépített típusa); szülőlánc az ID prefixből; csak a saját vagy felülírt hivatkozások kerülnek a sablonba |
 | `ListExtractor` | Lista/tár beállítások, lista mezők, tartalomtípusok, mappák | `lists.filter("Hidden eq false")`, `fields`, `rootFolder.folders` rekurzívan |
 | `ViewExtractor` | Nézetek | `views` – `ViewQuery`, `ViewFields`, `RowLimit`, `CustomFormatter` |
 | `GroupExtractor` | SP-csoportok, szerepkör-hozzárendelések, opcionálisan tagok | `siteGroups`, `roleAssignments`; tagok csak ha `includeMembers` |
@@ -259,7 +259,7 @@ export interface IProvider<TDef> {
 | --- | --- | --- |
 | `GroupProvider` | `siteGroups.add`, tulajdonos beállítása, `roleAssignments.add` | Tagok csak `includeMembers` esetén, `PrincipalMapper`-rel |
 | `SiteFieldProvider` | `fields.createFieldAsXml(resolvedSchemaXml)` | Lookup mezők itt nem; `ID` és `StaticName` megőrzése |
-| `ContentTypeProvider` | `contentTypes.add(id, name, ...)` + `fieldLinks` | Szülő előbb; a megőrzött ID biztosítja az öröklést |
+| `ContentTypeProvider` | **CSOM**: `ContentTypes.Add` a megőrzött ID-val, `FieldLinks.Add` + jelzők, `Update(false)` (a REST egyiket sem tudja, lásd `docs/spikes/02`) | Szülő előbb; a megőrzött ID biztosítja az öröklést; létrehozás után ID-ellenőrzés |
 | `ListProvider` | `lists.ensure(title, desc, template, ...)`, majd `update` a beállításokra | URL a sablon `url` mezője szerint, a cím utána |
 | `ListFieldProvider` | `createFieldAsXml` a listán, lookupok `{listkey}` feloldásával | Második körben fut, amikor minden lista létezik |
 | `ViewProvider` | `views.add` / `update`, `ViewFields` csere | Alapértelmezett nézet beállítása |
