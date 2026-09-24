@@ -3,7 +3,10 @@ import type { IListFieldDef, IListViewDef } from '../../../core/lists';
 import type { ArtifactKind, IContentType, ICopyJetTemplate, IField, IGroup, IList } from '../../../core/model';
 import type { IPlanStep } from '../../../core/planner';
 
-export function kindLabel(kind: ArtifactKind): string {
+const DOCUMENT_LIBRARY = 101;
+
+/** Type column of the preview: lists and libraries are told apart as in the mockups. */
+export function kindLabel(kind: ArtifactKind, def?: unknown): string {
   const labels: Partial<Record<ArtifactKind, string>> = {
     group: strings.KindGroup,
     siteField: strings.KindSiteField,
@@ -12,6 +15,7 @@ export function kindLabel(kind: ArtifactKind): string {
     listField: strings.KindListField,
     view: strings.KindView
   };
+  if (kind === 'list' && def && (def as IList).template === DOCUMENT_LIBRARY) return strings.KindLibrary;
   return labels[kind] || kind;
 }
 
@@ -45,11 +49,16 @@ export function format(template: string, ...args: Array<string | number>): strin
   return template.replace(/\{(\d+)\}/g, (m, i) => (args[Number(i)] !== undefined ? String(args[Number(i)]) : m));
 }
 
+/** Human-readable reason for an 'unsupported' diff change code (see providers). */
+export function reasonText(code: string): string {
+  return (strings as unknown as Record<string, string>)[`Reason${code}`] || code;
+}
+
 export const logLabels = {
   title: strings.LogTitle,
   allLevels: strings.LogAll,
   levels: { info: strings.LogInfo, warn: strings.LogWarn, error: strings.LogError },
   empty: strings.LogEmpty,
-  exportCsv: strings.LogExportCsv,
-  exportJson: strings.LogExportJson
+  exportCsv: strings.DownloadCsv,
+  exportJson: strings.DownloadJson
 };

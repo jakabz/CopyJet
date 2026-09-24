@@ -1,0 +1,29 @@
+// Design tokens of the docs/ui mockups. Theme slots keep SharePoint themes working; the defaults are the
+// mockup colours.
+$primary: "[theme:themePrimary, default: #0f6cbd]";
+$primaryDark: "[theme:themeDarker, default: #0c3b5e]";
+$primaryLight: "[theme:themeLighter, default: #e5f0fb]";
+$text: "[theme:bodyText, default: #242424]";
+$muted: "[theme:neutralSecondary, default: #616161]";
+$border: #e0e0e0;
+$borderStrong: #d1d1d1;
+$rowBorder: #f0f0f0;
+$surface: #ffffff;
+$surfaceAlt: #fafafa;
+$page: #faf9f8;
+$danger: #b10e1c;
+
+// Tags and message boxes: background / text.
+$newBg: #e0f2e0;
+$newFg: #0b5a0b;
+$sameBg: #f0f0f0;
+$sameFg: #424242;
+$diffBg: #fff4ce;
+$diffFg: #6b4200;
+$errBg: #fde7e9;
+$errFg: #8e0b16;
+$infoBg: #e5f0fb;
+$infoFg: #0c4a86;
+
+$radius: 6px;
+$radiusCard: 8px;

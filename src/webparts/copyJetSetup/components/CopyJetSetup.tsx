@@ -1,16 +1,16 @@
 import * as React from 'react';
-import { DefaultButton, MessageBar, MessageBarType, PrimaryButton, Spinner, Stack, Text, TextField } from '@fluentui/react';
+import { Spinner } from '@fluentui/react';
 import * as strings from 'CopyJetSetupWebPartStrings';
 import { discoverSite, type IDiscovery } from '../../../core/engine';
 import type { ArtifactKind } from '../../../core/model';
 import { WizardShell } from '../../../shared/components/WizardShell';
-import { ExportStep } from './ExportStep';
+import { Button, Message } from '../../../shared/components/ui';
+import { ExportStep, type ExportStatus } from './ExportStep';
+import { OptionsStep } from './OptionsStep';
 import { SelectStep } from './SelectStep';
-import { countByKind, format, selectedRefs } from './selection';
-import styles from './CopyJetSetup.module.scss';
+import { SummaryStep } from './SummaryStep';
+import { format, selectedArtifacts, selectedRefs } from './selection';
 import type { ICopyJetSetupProps } from './ICopyJetSetupProps';
-
-const KIND_ORDER: ArtifactKind[] = ['group', 'siteField', 'contentType', 'list', 'listField', 'view'];
 
 export function kindLabel(kind: ArtifactKind): string {
   const labels: Partial<Record<ArtifactKind, string>> = {
@@ -24,6 +24,15 @@ export function kindLabel(kind: ArtifactKind): string {
   return labels[kind] || kind;
 }
 
+const LOG_LABELS = {
+  title: strings.LogTitle,
+  allLevels: strings.LogAll,
+  levels: { info: strings.LogInfo, warn: strings.LogWarn, error: strings.LogError },
+  empty: strings.LogEmpty,
+  exportCsv: strings.LogExportCsv,
+  exportJson: strings.LogExportJson
+};
+
 interface ISetupState {
   step: number;
   discovery?: IDiscovery;
@@ -31,8 +40,9 @@ interface ISetupState {
   selected: string[];
   name: string;
   description: string;
-  /** Incremented to (re)start the extraction in the export step. */
+  /** Remounts the export step for a new extraction. */
   runId: number;
+  exportStatus?: ExportStatus;
 }
 
 type Action =
@@ -43,6 +53,7 @@ type Action =
   | { type: 'name'; name: string }
   | { type: 'description'; description: string }
   | { type: 'export' }
+  | { type: 'exportStatus'; status: ExportStatus }
   | { type: 'addMissing'; keys: string[] }
   | { type: 'reset' };
 
@@ -61,19 +72,22 @@ function reducer(state: ISetupState, action: Action): ISetupState {
     case 'description':
       return { ...state, description: action.description };
     case 'export':
-      return { ...state, step: 3, runId: state.runId + 1 };
+      return { ...state, step: 3, runId: state.runId + 1, exportStatus: 'running' };
+    case 'exportStatus':
+      return { ...state, exportStatus: action.status };
     case 'addMissing':
-      return { ...state, selected: state.selected.concat(action.keys.filter((k) => state.selected.indexOf(k) < 0)), runId: state.runId + 1 };
+      return { ...state, selected: state.selected.concat(action.keys.filter((k) => state.selected.indexOf(k) < 0)) };
     case 'reset':
-      return { ...state, step: 0, selected: [] };
+      return { ...state, step: 0, selected: [], exportStatus: undefined };
     default:
       return state;
   }
 }
 
-/** Setup wizard: select → options → summary → export (phase 1: structure only, .json template). */
+/** Setup wizard as in docs/ui (setup-1 … setup-4); phase 1 copies structure into a .json template. */
 const CopyJetSetup: React.FC<ICopyJetSetupProps> = ({ sp, siteTitle, createdBy }) => {
   const [state, dispatch] = React.useReducer(reducer, { step: 0, selected: [], name: '', description: '', runId: 0 });
+  const stopRef = React.useRef<(() => void) | undefined>(undefined);
 
   React.useEffect(() => {
     const ac = new AbortController();
@@ -86,99 +100,86 @@ const CopyJetSetup: React.FC<ICopyJetSetupProps> = ({ sp, siteTitle, createdBy }
 
   const artifacts = state.discovery ? state.discovery.artifacts : [];
   const refs = selectedRefs(artifacts, state.selected);
-  const counts = countByKind(refs);
   const steps = [strings.StepSelect, strings.StepOptions, strings.StepSummary, strings.StepExport];
+  const subtitles = [strings.SubtitleSelect, strings.SubtitleOptions, strings.SubtitleSummary, strings.SubtitleExport];
   const go = (step: number): void => dispatch({ type: 'step', step });
 
-  const summary = (
-    <ul className={styles.summary}>
-      {KIND_ORDER.filter((k) => counts[k]).map((k) => (
-        <li key={k}>
-          {kindLabel(k)}: <strong>{counts[k]}</strong>
-        </li>
-      ))}
-    </ul>
-  );
-
   let body: React.ReactNode;
-  let footer: React.ReactNode;
+  let footerStart: React.ReactNode;
+  let footerEnd: React.ReactNode;
   if (state.loadError) {
-    body = (
-      <MessageBar messageBarType={MessageBarType.error}>
-        {strings.LoadError}: {state.loadError}
-      </MessageBar>
-    );
+    body = <Message kind="error" title={strings.LoadError}>{state.loadError}</Message>;
   } else if (!state.discovery) {
     body = <Spinner label={strings.Loading} />;
   } else if (state.step === 0) {
     body = (
-      <Stack horizontal tokens={{ childrenGap: 24 }} wrap>
-        <Stack.Item grow className={styles.tree}>
-          {state.discovery.errors.length > 0 && (
-            <MessageBar messageBarType={MessageBarType.warning}>{format(strings.DiscoverPartialError, state.discovery.errors.map((e) => kindLabel(e.kind)).join(', '))}</MessageBar>
-          )}
-          <SelectStep artifacts={artifacts} selected={state.selected} onChange={(selected) => dispatch({ type: 'select', selected })} />
-        </Stack.Item>
-        <Stack.Item className={styles.side}>
-          <Text variant="mediumPlus">{strings.SelectionSummary}</Text>
-          {refs.length ? summary : <Text className={styles.meta}>{strings.NothingSelected}</Text>}
-        </Stack.Item>
-      </Stack>
+      <>
+        {state.discovery.errors.length > 0 && (
+          <Message kind="warning">{format(strings.DiscoverPartialError, state.discovery.errors.map((e) => kindLabel(e.kind)).join(', '))}</Message>
+        )}
+        <SelectStep artifacts={artifacts} selected={state.selected} onChange={(selected) => dispatch({ type: 'select', selected })} />
+      </>
     );
-    footer = <PrimaryButton text={strings.Next} disabled={refs.length === 0} onClick={() => go(1)} />;
+    footerEnd = <Button text={strings.Next} kind="primary" disabled={refs.length === 0} onClick={() => go(1)} />;
   } else if (state.step === 1) {
     body = (
-      <Stack tokens={{ childrenGap: 12 }} className={styles.form}>
-        <TextField
-          label={strings.NameLabel}
-          required
-          value={state.name}
-          onChange={(_, v) => dispatch({ type: 'name', name: v || '' })}
-          errorMessage={state.name.trim() ? undefined : strings.NameRequired}
-        />
-        <TextField label={strings.DescriptionLabel} multiline rows={3} value={state.description} onChange={(_, v) => dispatch({ type: 'description', description: v || '' })} />
-        <MessageBar>{strings.ContentLaterInfo}</MessageBar>
-      </Stack>
+      <OptionsStep
+        items={selectedArtifacts(artifacts, state.selected).filter((a) => a.ref.kind === 'list' || a.ref.kind === 'group')}
+        name={state.name}
+        description={state.description}
+        onName={(name) => dispatch({ type: 'name', name })}
+        onDescription={(description) => dispatch({ type: 'description', description })}
+      />
     );
-    footer = (
+    footerEnd = (
       <>
-        <DefaultButton text={strings.Back} onClick={() => go(0)} />
-        <PrimaryButton text={strings.Next} disabled={!state.name.trim()} onClick={() => go(2)} />
+        <Button text={strings.Back} onClick={() => go(0)} />
+        <Button text={strings.Next} kind="primary" disabled={!state.name.trim()} onClick={() => go(2)} />
       </>
     );
   } else if (state.step === 2) {
     body = (
-      <Stack tokens={{ childrenGap: 8 }}>
-        <Text variant="mediumPlus">{state.name}</Text>
-        <Text>{strings.SummaryIntro}</Text>
-        {summary}
-      </Stack>
+      <SummaryStep
+        sp={sp}
+        refs={refs}
+        discovered={artifacts}
+        name={state.name}
+        createdBy={createdBy}
+        kindLabel={kindLabel}
+        onAddMissing={(keys) => dispatch({ type: 'addMissing', keys })}
+      />
     );
-    footer = (
+    footerEnd = (
       <>
-        <DefaultButton text={strings.Back} onClick={() => go(1)} />
-        <PrimaryButton text={strings.CreateTemplate} onClick={() => dispatch({ type: 'export' })} />
+        <Button text={strings.Back} onClick={() => go(1)} />
+        <Button text={strings.CreateTemplate} kind="primary" onClick={() => dispatch({ type: 'export' })} />
       </>
     );
   } else {
     body = (
       <ExportStep
+        key={state.runId}
         sp={sp}
         refs={refs}
         discovered={artifacts}
         name={state.name}
         description={state.description}
         createdBy={createdBy}
-        runId={state.runId}
         kindLabel={kindLabel}
-        onAddMissing={(keys) => dispatch({ type: 'addMissing', keys })}
-        onNewTemplate={() => dispatch({ type: 'reset' })}
+        logLabels={LOG_LABELS}
+        onStatus={(status, stop) => {
+          stopRef.current = stop;
+          dispatch({ type: 'exportStatus', status });
+        }}
       />
     );
+    const running = state.exportStatus === 'running';
+    footerStart = running ? <Button text={strings.Stop} kind="danger" onClick={() => stopRef.current && stopRef.current()} /> : undefined;
+    footerEnd = running ? undefined : <Button text={strings.NewTemplate} kind="primary" onClick={() => dispatch({ type: 'reset' })} />;
   }
 
   return (
-    <WizardShell title={strings.Title} steps={steps} current={state.step} footer={footer}>
+    <WizardShell title={strings.Title} subtitle={subtitles[state.step]} steps={steps} current={state.step} footerStart={footerStart} footerEnd={footerEnd}>
       {body}
     </WizardShell>
   );

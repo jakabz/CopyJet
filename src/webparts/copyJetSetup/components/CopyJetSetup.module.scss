@@ -1,46 +1,158 @@
+@use '../../../shared/styles/tokens' as t;
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+// ---- Selection tree (docs/ui setup-1) ----
 .tree {
-  min-width: 320px;
+  overflow: hidden;
+  max-height: 560px;
+  overflow-y: auto;
 }
 
-.side {
-  min-width: 200px;
-  max-width: 260px;
+.row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 12px;
+  border-bottom: 1px solid t.$rowBorder;
 }
 
-.form {
-  max-width: 560px;
+.level0 {
+  padding-left: 12px;
 }
 
-.category {
-  border-top: 1px solid "[theme:neutralLight, default: #edebe9]";
-  padding-top: 8px;
+.level1 {
+  padding-left: 40px;
 }
 
-.categoryTitle {
-  display: block;
-  font-weight: 600;
-  margin-bottom: 4px;
+.level2 {
+  padding-left: 96px;
+  padding-top: 5px;
+  padding-bottom: 5px;
+  font-size: 13px;
 }
 
-.children {
-  margin-left: 64px;
-  margin-bottom: 8px;
+.rowLabel {
+  flex-grow: 1;
 }
 
-.child {
-  margin: 4px 0;
+.rowMeta {
+  font-size: 13px;
+  text-align: right;
+}
+
+.subhead {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.chevron {
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: t.$muted;
+  cursor: pointer;
+  font-size: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .chevronSpace {
   display: inline-block;
-  width: 32px;
+  width: 20px;
 }
 
-.meta {
-  color: "[theme:neutralSecondary, default: #605e5c]";
+// ---- Options (docs/ui setup-2) ----
+.optionsPanel {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 16px 20px;
+  box-sizing: border-box;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+
+  > span {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
 }
 
-.summary {
-  margin: 4px 0;
-  padding-left: 20px;
+.panelHeading {
+  font-size: 16px;
+  font-weight: 600;
+  flex-grow: 1;
+}
+
+.iconButton {
+  border: none;
+  padding: 0 10px;
+}
+
+.fieldset {
+  border: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+
+  legend {
+    margin-bottom: 8px;
+  }
+
+  > span {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+}
+
+.inlineSettings {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 24px;
+  align-items: center;
+
+  > span {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+}
+
+.error {
+  color: t.$danger;
+  font-size: 13px;
+}
+
+// ---- Export (docs/ui setup-4) ----
+.output {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  padding: 16px;
+  flex-wrap: wrap;
+
+  > span {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+}
+
+.outputText {
+  flex-grow: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }

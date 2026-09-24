@@ -341,6 +341,8 @@ sablon.zip
 
 A Setup egy négylépéses varázsló (Kiválasztás → Opciók → Összesítő → Export); az állapotot egy `useReducer`-alapú store tartja, a logikát a core végzi. UI-vázlat: `docs/ui/`.
 
+**A felület a `docs/ui` vázlatait követi** (kártya, lépésjelző, lábléc, címkék, statisztikai kártyák, naplópanel – `shared/components/ui.tsx`, `ui.module.scss`, `shared/styles/_tokens.scss`). A még nem elérhető funkciók (tartalom, verziók, tagok, `.zip`, sablontár, leképezés) a vázlat helyén **letiltva, „(2. fázis)” jelzéssel** jelennek meg; tartalomhoz kötött számlálók (elemek, fájlok, méret) helyett az 1. fázisban értelmes adatok (oszlopok, nézetek, csoportok) szerepelnek. Az Összesítő egy próbakinyeréssel mutatja a hiányzó függőségeket; a végleges kinyerés az Export lépésben fut.
+
 | Komponens | Feladat | Megoldás |
 | --- | --- | --- |
 | `CopyJetSetupWebPart.ts` | Belépési pont, property pane | `http.createSp(context)`, React render; tulajdonságok: sablontár, max. fájlméret, rendszerlisták mutatása |

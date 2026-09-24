@@ -28,6 +28,8 @@ export interface IDiscoveredArtifact {
   group?: string;
   itemCount?: number;
   sizeBytes?: number;
+  /** Lists: the SharePoint list template (100 = list, 101 = library …), for grouping in the Setup. */
+  listTemplate?: number;
   /** Set when CopyJet cannot copy the artifact (reason code, e.g. 'LIST_TEMPLATE_UNSUPPORTED'); shown disabled. */
   unsupported?: string;
 }

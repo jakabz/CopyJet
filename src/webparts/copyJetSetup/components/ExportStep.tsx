@@ -1,5 +1,4 @@
 import * as React from 'react';
-import { DefaultButton, MessageBar, MessageBarType, PrimaryButton, ProgressIndicator, Stack, Text } from '@fluentui/react';
 import type { SPFI } from '@pnp/sp';
 import * as strings from 'CopyJetSetupWebPartStrings';
 import { extractTemplate, type IExtractResult } from '../../../core/engine';
@@ -9,7 +8,11 @@ import type { ArtifactKind, IArtifactRef, IDiscoveredArtifact } from '../../../c
 import { formatIssues, type IValidationIssue } from '../../../core/schema';
 import { LogViewer } from '../../../shared/components/LogViewer';
 import { downloadBlob, templateFileName } from '../../../shared/components/download';
+import { Button, Message, ProgressBar, ui } from '../../../shared/components/ui';
 import { format } from './selection';
+import styles from './CopyJetSetup.module.scss';
+
+export type ExportStatus = 'running' | 'done' | 'failed' | 'stopped';
 
 export interface IExportStepProps {
   sp: SPFI;
@@ -18,14 +21,11 @@ export interface IExportStepProps {
   name: string;
   description: string;
   createdBy: string;
-  /** Changing it starts a new extraction. */
-  runId: number;
   kindLabel: (kind: ArtifactKind) => string;
-  onAddMissing: (keys: string[]) => void;
-  onNewTemplate: () => void;
+  logLabels: React.ComponentProps<typeof LogViewer>['labels'];
+  /** Reports the status so the wizard can show Stop / New template in its footer. */
+  onStatus: (status: ExportStatus, stop: () => void) => void;
 }
-
-type Status = 'running' | 'done' | 'failed' | 'stopped';
 
 function message(e: unknown): string {
   if (e instanceof CopyJetError && e.code === 'TEMPLATE_INVALID') {
@@ -34,113 +34,74 @@ function message(e: unknown): string {
   return e instanceof Error ? e.message : String(e);
 }
 
-/** Step 4: extraction with progress and log, missing dependencies, download of the .json template. */
-export const ExportStep: React.FC<IExportStepProps> = (props) => {
-  const { sp, refs, discovered, name, description, createdBy, runId, kindLabel, onAddMissing, onNewTemplate } = props;
-  const [logger, setLogger] = React.useState(() => new Logger());
-  const [status, setStatus] = React.useState<Status>('running');
+/** Step 4 (docs/ui setup-4): progress, log, output card with download. */
+export const ExportStep: React.FC<IExportStepProps> = ({ sp, refs, discovered, name, description, createdBy, kindLabel, logLabels, onStatus }) => {
+  const [logger] = React.useState(() => new Logger());
+  const [status, setStatus] = React.useState<ExportStatus>('running');
   const [progress, setProgress] = React.useState<{ done: number; total: number; kind?: ArtifactKind }>({ done: 0, total: 1 });
   const [result, setResult] = React.useState<IExtractResult | undefined>(undefined);
   const [error, setError] = React.useState<string | undefined>(undefined);
-  const abortRef = React.useRef<AbortController | undefined>(undefined);
+  const fileName = React.useMemo(() => templateFileName(name, new Date(), 'json'), [name]);
 
   React.useEffect(() => {
-    const log = new Logger();
     const ac = new AbortController();
-    abortRef.current = ac;
-    setLogger(log);
-    setStatus('running');
-    setResult(undefined);
-    setError(undefined);
-    extractTemplate(sp, {
-      refs,
-      discovered,
-      name,
-      description,
-      createdBy,
-      log,
-      signal: ac.signal,
-      onProgress: (done, total, kind) => setProgress({ done, total, kind })
-    }).then(
+    const report = (s: ExportStatus): void => {
+      setStatus(s);
+      onStatus(s, () => ac.abort());
+    };
+    report('running');
+    extractTemplate(sp, { refs, discovered, name, description, createdBy, log: logger, signal: ac.signal, onProgress: (done, total, kind) => setProgress({ done, total, kind }) }).then(
       (r) => {
         if (ac.signal.aborted) return;
         setResult(r);
-        setStatus('done');
+        report('done');
       },
       (e: unknown) => {
         if (ac.signal.aborted) {
-          setStatus('stopped');
+          report('stopped');
           return;
         }
-        log.error(message(e), { code: e instanceof CopyJetError ? e.code : 'EXPORT_FAILED' });
+        logger.error(message(e), { code: e instanceof CopyJetError ? e.code : 'EXPORT_FAILED' });
         setError(message(e));
-        setStatus('failed');
+        report('failed');
       }
     );
     return () => ac.abort();
-    // Only a new runId restarts the extraction.
-  }, [runId]);
+    // One extraction per mount: the wizard remounts this step for a new export.
+  }, []);
 
   const download = (): void => {
     if (!result) return;
     result.writer.finalize().then(
-      (blob) => downloadBlob(blob, templateFileName(name, new Date(), 'json')),
+      (blob) => downloadBlob(blob, fileName),
       (e: unknown) => setError(message(e))
     );
   };
 
-  const stop = (): void => {
-    if (abortRef.current) abortRef.current.abort();
-    setStatus('stopped');
-  };
-
   return (
-    <Stack tokens={{ childrenGap: 16 }}>
-      {status === 'running' && (
-        <ProgressIndicator
-          label={format(strings.ExportRunning, progress.kind ? kindLabel(progress.kind) : '…')}
-          percentComplete={progress.total ? progress.done / progress.total : undefined}
-        />
+    <>
+      {status === 'running' ? (
+        <ProgressBar label={format(strings.ExportRunning, progress.kind ? kindLabel(progress.kind) : '…')} detail={format(strings.ExportSteps, progress.done, progress.total)} fraction={progress.total ? progress.done / progress.total : 0} />
+      ) : (
+        <ProgressBar label={strings.ExportDoneLabel} detail={format(strings.ExportSteps, progress.total, progress.total)} fraction={status === 'done' ? 1 : progress.total ? progress.done / progress.total : 0} />
       )}
-      {status === 'done' && <MessageBar messageBarType={MessageBarType.success}>{strings.ExportDone}</MessageBar>}
-      {status === 'stopped' && <MessageBar>{strings.ExportStopped}</MessageBar>}
-      {error && (
-        <MessageBar messageBarType={MessageBarType.error}>
-          {strings.ExportFailed}: {error}
-        </MessageBar>
-      )}
-      {result && result.missing.length > 0 && (
-        <MessageBar
-          messageBarType={MessageBarType.warning}
-          actions={<DefaultButton text={strings.AddMissingAndRebuild} onClick={() => onAddMissing(result.missing.map((m) => m.ref.key))} />}
-        >
-          <Text>{format(strings.MissingTitle, result.missing.length)}</Text>
-          <ul>
-            {result.missing.map((m) => (
-              <li key={m.ref.key}>
-                {kindLabel(m.ref.kind)}: {m.title}
-              </li>
-            ))}
-          </ul>
-        </MessageBar>
-      )}
-      <Stack horizontal tokens={{ childrenGap: 8 }}>
-        {status === 'running' && <DefaultButton text={strings.Stop} onClick={stop} />}
-        {status === 'done' && <PrimaryButton text={strings.Download} onClick={download} />}
-        {status !== 'running' && <DefaultButton text={strings.NewTemplate} onClick={onNewTemplate} />}
-      </Stack>
-      <LogViewer
-        logger={logger}
-        fileBaseName={templateFileName(name, new Date(), 'log').replace(/\.log$/, '-log')}
-        labels={{
-          title: strings.LogTitle,
-          allLevels: strings.LogAll,
-          levels: { info: strings.LogInfo, warn: strings.LogWarn, error: strings.LogError },
-          empty: strings.LogEmpty,
-          exportCsv: strings.LogExportCsv,
-          exportJson: strings.LogExportJson
-        }}
-      />
-    </Stack>
+      {status === 'done' && <Message kind="success">{strings.ExportDone}</Message>}
+      {status === 'stopped' && <Message kind="note">{strings.ExportStopped}</Message>}
+      {error && <Message kind="error" title={strings.ExportFailed}>{error}</Message>}
+      <LogViewer logger={logger} labels={logLabels} />
+      <div className={`${ui.box} ${styles.output}`}>
+        <div className={styles.outputText}>
+          <span className={ui.strong}>{strings.Output}</span>
+          <span className={ui.muted} style={{ fontSize: 13 }}>
+            {status === 'done' ? fileName : format(strings.OutputPending, fileName)}
+          </span>
+        </div>
+        <span>
+          <input className={ui.check} type="checkbox" id="cj-save-lib" disabled /> <label htmlFor="cj-save-lib">{strings.SaveToLibrary}</label>
+          <span className={ui.muted}> {strings.Phase2}</span>
+        </span>
+        <Button text={strings.Download} kind={status === 'done' ? 'primary' : 'default'} disabled={status !== 'done'} onClick={download} />
+      </div>
+    </>
   );
 };

@@ -1,8 +1,9 @@
 import * as React from 'react';
-import { DefaultButton, Dropdown, Stack, Text, type IDropdownOption } from '@fluentui/react';
 import type { ILogEntry, Logger, LogLevel } from '../../core/logger';
 import { downloadBlob } from './download';
-import styles from './LogViewer.module.scss';
+import { Tag, type TagKind } from './ui';
+import styles from './ui.module.scss';
+import log from './LogViewer.module.scss';
 
 export interface ILogViewerLabels {
   title: string;
@@ -16,16 +17,20 @@ export interface ILogViewerLabels {
 export interface ILogViewerProps {
   logger: Logger;
   labels: ILogViewerLabels;
-  /** File name without extension for the exports. */
-  fileBaseName: string;
-  /** Show at most this many latest entries (all are exported). */
+  /** Show at most this many latest entries (exports contain all). */
   maxRows?: number;
 }
 
-const time = (iso: string): string => iso.slice(11, 19);
+const TAG: Record<LogLevel, TagKind> = { info: 'info', warn: 'diff', error: 'err' };
 
-/** Live run log: follows the Logger, filters by level, exports CSV/JSON. */
-export const LogViewer: React.FC<ILogViewerProps> = ({ logger, labels, fileBaseName, maxRows = 300 }) => {
+const time = (iso: string): string => {
+  const d = new Date(iso);
+  const p = (n: number): string => (n < 10 ? `0${n}` : String(n));
+  return `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+};
+
+/** Live log panel of the mockups: header with level filter, rows with time, level tag and message. */
+export const LogViewer: React.FC<ILogViewerProps> = ({ logger, labels, maxRows = 300 }) => {
   const [entries, setEntries] = React.useState<ReadonlyArray<ILogEntry>>(logger.entries.slice());
   const [level, setLevel] = React.useState<LogLevel | 'all'>('all');
 
@@ -34,27 +39,29 @@ export const LogViewer: React.FC<ILogViewerProps> = ({ logger, labels, fileBaseN
     return logger.subscribe(() => setEntries(logger.entries.slice()));
   }, [logger]);
 
-  const options: IDropdownOption[] = [{ key: 'all', text: labels.allLevels }].concat(
-    (['info', 'warn', 'error'] as LogLevel[]).map((l) => ({ key: l, text: `${labels.levels[l]} (${logger.counts[l]})` }))
-  );
   const shown = entries.filter((e) => level === 'all' || e.level === level).slice(-maxRows);
 
   return (
-    <Stack tokens={{ childrenGap: 8 }}>
-      <Stack horizontal verticalAlign="end" tokens={{ childrenGap: 8 }} wrap>
-        <Text variant="mediumPlus" className={styles.title}>
-          {labels.title}
-        </Text>
-        <Dropdown options={options} selectedKey={level} onChange={(_, o) => o && setLevel(o.key as LogLevel | 'all')} styles={{ root: { minWidth: 160 } }} />
-        <DefaultButton text={labels.exportCsv} disabled={entries.length === 0} onClick={() => downloadBlob(new Blob([logger.toCsv()], { type: 'text/csv' }), `${fileBaseName}.csv`)} />
-        <DefaultButton text={labels.exportJson} disabled={entries.length === 0} onClick={() => downloadBlob(new Blob([logger.toJson()], { type: 'application/json' }), `${fileBaseName}.json`)} />
-      </Stack>
-      <div className={styles.log} role="log" aria-live="polite">
-        {shown.length === 0 && <div className={styles.empty}>{labels.empty}</div>}
+    <div className={`${styles.box} ${log.panel}`}>
+      <div className={log.head}>
+        <span className={log.title}>{labels.title}</span>
+        <select className={styles.select} aria-label={labels.allLevels} value={level} onChange={(e) => setLevel(e.target.value as LogLevel | 'all')}>
+          <option value="all">{labels.allLevels}</option>
+          {(['info', 'warn', 'error'] as LogLevel[]).map((l) => (
+            <option key={l} value={l}>
+              {`${labels.levels[l]} (${logger.counts[l]})`}
+            </option>
+          ))}
+        </select>
+      </div>
+      <div className={log.rows} role="log" aria-live="polite">
+        {shown.length === 0 && <div className={`${log.row} ${styles.muted}`}>{labels.empty}</div>}
         {shown.map((e, i) => (
-          <div key={i} className={styles[e.level]}>
-            <span className={styles.time}>{time(e.time)}</span>
-            <span className={styles.level}>{labels.levels[e.level]}</span>
+          <div key={i} className={log.row}>
+            <span className={`${styles.muted} ${log.time}`}>{time(e.time)}</span>
+            <span className={log.level}>
+              <Tag kind={TAG[e.level]}>{labels.levels[e.level]}</Tag>
+            </span>
             <span>
               {e.artifact ? `${e.artifact.key}: ` : ''}
               {e.message}
@@ -62,6 +69,15 @@ export const LogViewer: React.FC<ILogViewerProps> = ({ logger, labels, fileBaseN
           </div>
         ))}
       </div>
-    </Stack>
+    </div>
   );
 };
+
+/** Downloads the log as CSV or JSON. */
+export function downloadLog(logger: Logger, fileBaseName: string, format: 'csv' | 'json'): void {
+  if (format === 'csv') {
+    downloadBlob(new Blob([logger.toCsv()], { type: 'text/csv' }), `${fileBaseName}.csv`);
+  } else {
+    downloadBlob(new Blob([logger.toJson()], { type: 'application/json' }), `${fileBaseName}.json`);
+  }
+}
