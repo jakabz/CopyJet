@@ -221,7 +221,7 @@ export interface IExtractor<TDef> {
 
 | Extractor | Mit olvas | Megoldás / API |
 | --- | --- | --- |
-| `SiteFieldExtractor` | Egyedi site columnok | `web.fields.filter("CanBeDeleted eq true")`, `SchemaXml` tokenizálva |
+| `SiteFieldExtractor` | Egyedi site columnok | `web.fields.filter("Hidden eq false")` + kliensoldali szűrés a `SchemaXml` `SourceID`-ja szerint (GUID = egyedi; lásd `docs/spikes/01`), `SchemaXml` szűrve és tokenizálva |
 | `ContentTypeExtractor` | Egyedi tartalomtípusok, mezőhivatkozások | `web.contentTypes` + `fieldLinks`; szülőlánc az ID prefixből |
 | `ListExtractor` | Lista/tár beállítások, lista mezők, tartalomtípusok, mappák | `lists.filter("Hidden eq false")`, `fields`, `rootFolder.folders` rekurzívan |
 | `ViewExtractor` | Nézetek | `views` – `ViewQuery`, `ViewFields`, `RowLimit`, `CustomFormatter` |

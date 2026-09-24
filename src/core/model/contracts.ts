@@ -1,6 +1,8 @@
 import type { SPFI } from '@pnp/sp';
 import type { ArtifactKind, IArtifactRef, IDiscoveredArtifact } from './artifacts';
 import type { ICopyJetTemplate } from './generated/copyjet.v1';
+import type { TokenContext } from '../tokenizer/TokenContext';
+import type { Logger } from '../logger/Logger';
 
 /** Receives extracted data; hides the package format (.json / .zip) from the extractors. */
 export interface ITemplateWriter {
@@ -26,6 +28,9 @@ export interface IExtractOptions {
   includeContent: boolean;
   includeVersions: boolean;
   includeMembers: boolean;
+  /** Source-site values to tokenize (site URLs, list GUIDs → {listkey:X} ...). */
+  tokens: TokenContext;
+  log: Logger;
   signal?: AbortSignal;
 }
 
@@ -56,6 +61,9 @@ export interface IApplyResult {
 
 export interface IInstallContext {
   targetSiteUrl: string;
+  /** Target-site values; providers register the identifiers they create. */
+  tokens: TokenContext;
+  log: Logger;
   signal?: AbortSignal;
 }
 
