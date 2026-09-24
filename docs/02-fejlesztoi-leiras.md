@@ -223,7 +223,7 @@ export interface IExtractor<TDef> {
 | --- | --- | --- |
 | `SiteFieldExtractor` | Egyedi site columnok | `web.fields.filter("Hidden eq false")` + kliensoldali szűrés a `SchemaXml` `SourceID`-ja szerint (GUID = egyedi; lásd `docs/spikes/01`), `SchemaXml` szűrve és tokenizálva |
 | `ContentTypeExtractor` | Egyedi tartalomtípusok, mezőhivatkozások | `web.contentTypes` + `fieldLinks`; egyedi = nincs `FeatureId` a `SchemaXml`-ben (és nem a modern lapok beépített típusa); szülőlánc az ID prefixből; csak a saját vagy felülírt hivatkozások kerülnek a sablonba |
-| `ListExtractor` | Lista/tár beállítások, lista mezők, tartalomtípusok, mappák | `lists.filter("Hidden eq false")`, `fields`, `rootFolder.folders` rekurzívan |
+| `ListExtractor` | Lista/tár beállítások (a lista mezők, tartalomtípusok, mappák külön lépésben) | Felhasználói lista = nem `Hidden`, nem `IsSystemList`, nem `IsCatalog` (lásd `docs/spikes/03`); támogatott sablon 100 és 101; kulcs az URL utolsó szegmenséből, ékezet nélkül |
 | `ViewExtractor` | Nézetek | `views` – `ViewQuery`, `ViewFields`, `RowLimit`, `CustomFormatter` |
 | `GroupExtractor` | SP-csoportok, szerepkör-hozzárendelések, opcionálisan tagok | `siteGroups`, `roleAssignments`; tagok csak ha `includeMembers` |
 | `ListSecurityExtractor` | Egyedi listajogosultság | `HasUniqueRoleAssignments`, `roleAssignments.expand("Member,RoleDefinitionBindings")` |
@@ -234,7 +234,7 @@ export interface IExtractor<TDef> {
 
 **Szabályok**
 
-- Rendszer- és rejtett listák kizárása egy központi tiltólistával (pl. `appdata`, `TaxonomyHiddenList`, `User Information List`).
+- Rendszer- és rejtett listák kizárása a lista saját jelzői alapján (`Hidden`, `IsSystemList`, `IsCatalog`), nem névlistával (spike 03).
 - Mezők: csak nem rendszer mezők (`FromBaseType eq false` vagy egyedi `SourceID`).
 - A `PageExtractor` a webpart-tulajdonságokat `deepTokenize`-zal dolgozza fel; a nem tokenizálható, forrás-URL-t tartalmazó értékekről figyelmeztetést ír.
 - Minden extractor az `ITemplateWriter`-be ír, nem közvetlenül a JSON-ba; nagy adat (elemek, fájlok) a packager külön bejegyzéseibe kerül.
@@ -260,7 +260,7 @@ export interface IProvider<TDef> {
 | `GroupProvider` | `siteGroups.add`, tulajdonos beállítása, `roleAssignments.add` | Tagok csak `includeMembers` esetén, `PrincipalMapper`-rel |
 | `SiteFieldProvider` | `fields.createFieldAsXml(resolvedSchemaXml)` | Lookup mezők itt nem; `ID` és `StaticName` megőrzése |
 | `ContentTypeProvider` | **CSOM**: `ContentTypes.Add` a megőrzött ID-val, `FieldLinks.Add` + jelzők, `Update(false)` (a REST egyiket sem tudja, lásd `docs/spikes/02`) | Szülő előbb; a megőrzött ID biztosítja az öröklést; létrehozás után ID-ellenőrzés |
-| `ListProvider` | `lists.ensure(title, desc, template, ...)`, majd `update` a beállításokra | URL a sablon `url` mezője szerint, a cím utána |
+| `ListProvider` | Keresés URL szerint (`getList`, 404 = nincs); létrehozás az URL-névvel mint címmel, majd egy `MERGE` a címmel és a beállításokkal | A `lists.ensure` cím szerint keres és diff nélkül frissít, ezért nem használjuk; létrehozás után URL-ellenőrzés (`LIST_URL_MISMATCH`); címütközés és nem létrehozható URL = `unsupported` |
 | `ListFieldProvider` | `createFieldAsXml` a listán, lookupok `{listkey}` feloldásával | Második körben fut, amikor minden lista létezik |
 | `ViewProvider` | `views.add` / `update`, `ViewFields` csere | Alapértelmezett nézet beállítása |
 | `ListSecurityProvider` | `breakRoleInheritance(false)` + `roleAssignments.add` | Csak ha a forrásban egyedi volt |

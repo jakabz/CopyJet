@@ -28,4 +28,6 @@ export interface IDiscoveredArtifact {
   group?: string;
   itemCount?: number;
   sizeBytes?: number;
+  /** Set when CopyJet cannot copy the artifact (reason code, e.g. 'LIST_TEMPLATE_UNSUPPORTED'); shown disabled. */
+  unsupported?: string;
 }
