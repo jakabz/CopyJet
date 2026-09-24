@@ -69,6 +69,16 @@ describe('buildPlan', () => {
     expect(plan.steps.find((s) => s.ref.key === 'listField:Projektek/Ugyfel')!.dependsOn).toEqual(['list:Projektek', 'list:Ugyfelek']);
   });
 
+  it('locks steps by the schema they change', () => {
+    const plan = buildPlan(template());
+    const lockOf = (key: string): string => plan.steps.find((s) => s.ref.key === key)!.lock;
+    expect(lockOf('listField:Projektek/Ugyfel')).toBe('list:Projektek');
+    expect(lockOf('view:Projektek/Minden elem')).toBe('list:Projektek');
+    expect(lockOf('field:CJ_Status')).toBe('web:fields');
+    expect(lockOf(`contentType:${PROJEKT}`)).toBe('web:contentTypes');
+    expect(lockOf('list:Ugyfelek')).toBe('list:Ugyfelek');
+  });
+
   it('carries the provider input: list columns and views with their list', () => {
     const plan = buildPlan(template());
     expect(plan.steps.find((s) => s.ref.kind === 'view')!.def).toMatchObject({ listKey: 'Projektek', listUrl: 'Lists/Projektek', view: { title: 'Minden elem' } });

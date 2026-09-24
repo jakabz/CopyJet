@@ -72,32 +72,45 @@ export async function runPlan(sp: SPFI, plan: IPlan, ctx: IInstallContext, optio
       aborted = true;
       break;
     }
+    // Steps sharing a lock run in sequence; different locks run in parallel.
+    const groups: IPlanStep[][] = [];
+    const byLock: { [lock: string]: IPlanStep[] } = {};
+    level.forEach((step) => {
+      if (!byLock[step.lock]) groups.push((byLock[step.lock] = []));
+      byLock[step.lock].push(step);
+    });
+    const runStep = async (step: IPlanStep): Promise<void> => {
+      const failedDep = step.dependsOn.filter((d) => results[d] && ['failed', 'blocked', 'cancelled'].indexOf(results[d].status) >= 0)[0];
+      if (failedDep) {
+        ctx.log.warn(`Skipped because ${failedDep} did not install.`, { artifact: step.ref, code: 'STEP_BLOCKED', detail: failedDep });
+        finish(step, 'blocked', { blockedBy: failedDep });
+        return;
+      }
+      try {
+        let mode = (options.modes && options.modes[step.ref.key]) || options.mode || 'skip';
+        // Inside something this run created (e.g. the default view of a new list) the template decides:
+        // nothing there predates the install, so 'skip' would only keep SharePoint's defaults.
+        if (mode === 'skip' && step.dependsOn.some((d) => results[d] && results[d].status === 'created')) {
+          mode = 'update';
+        }
+        const r = await provider(options.providers, step).apply(sp, step.def, mode, ctx);
+        finish(step, r.outcome);
+      } catch (e) {
+        if (isAbort(e)) throw e;
+        ctx.log.error(e instanceof Error ? e.message : String(e), {
+          artifact: step.ref,
+          code: e instanceof CopyJetError ? e.code : 'STEP_FAILED',
+          detail: e instanceof CopyJetError ? e.detail : e
+        });
+        finish(step, 'failed', { error: e });
+      }
+    };
     try {
       await limitConcurrency(
-        level.map((step) => async () => {
-          const failedDep = step.dependsOn.filter((d) => results[d] && ['failed', 'blocked', 'cancelled'].indexOf(results[d].status) >= 0)[0];
-          if (failedDep) {
-            ctx.log.warn(`Skipped because ${failedDep} did not install.`, { artifact: step.ref, code: 'STEP_BLOCKED', detail: failedDep });
-            finish(step, 'blocked', { blockedBy: failedDep });
-            return;
-          }
-          try {
-            let mode = (options.modes && options.modes[step.ref.key]) || options.mode || 'skip';
-            // Inside something this run created (e.g. the default view of a new list) the template decides:
-            // nothing there predates the install, so 'skip' would only keep SharePoint's defaults.
-            if (mode === 'skip' && step.dependsOn.some((d) => results[d] && results[d].status === 'created')) {
-              mode = 'update';
-            }
-            const r = await provider(options.providers, step).apply(sp, step.def, mode, ctx);
-            finish(step, r.outcome);
-          } catch (e) {
-            if (isAbort(e)) throw e;
-            ctx.log.error(e instanceof Error ? e.message : String(e), {
-              artifact: step.ref,
-              code: e instanceof CopyJetError ? e.code : 'STEP_FAILED',
-              detail: e instanceof CopyJetError ? e.detail : e
-            });
-            finish(step, 'failed', { error: e });
+        groups.map((group) => async () => {
+          for (const step of group) {
+            if (ctx.signal && ctx.signal.aborted) throw new AbortError();
+            await runStep(step);
           }
         }),
         options.concurrency || 4,

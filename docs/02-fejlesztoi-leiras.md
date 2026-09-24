@@ -307,6 +307,7 @@ A `planner` a sablonból függőségi gráfot épít és lépéssort készít; a
 **`engine`**
 
 - `run(plan, ctx, { signal, onProgress })` – lépések sorban, szinten belül `limitConcurrency(4)`-gyel.
+- **Zárolás:** az azonos sémát módosító lépések (ugyanannak a listának az oszlopai és nézetei, a web site columnjai, a web tartalomtípusai – `IPlanStep.lock`) egymás után futnak, a különbözők párhuzamosan. Az első valódi telepítésen a párhuzamos lista-sémamódosítás véletlenszerű HTTP 500-akat adott (0x8007047E, 0x80131904).
 - Minden lépés: `provider.apply` → tokenek regisztrálása → `state.saveProgress` → `logger`.
 - Hiba esetén a lépés `failed`, a függő lépések `blocked`, a függetlenek futnak tovább.
 - `AbortController` a leállításhoz; `resume(runId)` a kész lépéseket kihagyja, a tokeneket és `IdMap`-eket a `state`-ből tölti vissza.

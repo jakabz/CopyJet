@@ -8,8 +8,8 @@ import { TokenContext } from '../../src/core/tokenizer';
 
 const sp = {} as SPFI;
 
-function step(kind: ArtifactKind, key: string, level: number, dependsOn: string[] = []): IPlanStep {
-  return { ref: { kind, key }, def: { key } as unknown as StepDef, dependsOn, level };
+function step(kind: ArtifactKind, key: string, level: number, dependsOn: string[] = [], lock: string = key): IPlanStep {
+  return { ref: { kind, key }, def: { key } as unknown as StepDef, dependsOn, level, lock };
 }
 
 function plan(levels: IPlanStep[][]): IPlan {
@@ -91,6 +91,37 @@ describe('runPlan', () => {
     expect(fake.maxInFlight).toBe(2);
     expect(fake.calls.find((c) => c.key === 'l3')!.mode).toBe('rename');
     expect(fake.calls.find((c) => c.key === 'l1')!.mode).toBe('update');
+  });
+
+  it('runs steps changing the same list one after another, other lists in parallel', async () => {
+    const level = [
+      step('listField', 'a1', 0, [], 'list:A'),
+      step('listField', 'a2', 0, [], 'list:A'),
+      step('listField', 'a3', 0, [], 'list:A'),
+      step('listField', 'b1', 0, [], 'list:B')
+    ];
+    const fake = fakeProviders({}, 5);
+    const inFlightByList: { [lock: string]: number } = {};
+    let clash = false;
+    const guarded: ProviderMap = {
+      listField: {
+        ...fake.providers.listField!,
+        apply: async (s, def, mode, c) => {
+          const lock = level.find((x) => x.def === def)!.lock;
+          inFlightByList[lock] = (inFlightByList[lock] || 0) + 1;
+          if (inFlightByList[lock] > 1) clash = true;
+          try {
+            return await fake.providers.listField!.apply(s, def, mode, c);
+          } finally {
+            inFlightByList[lock]--;
+          }
+        }
+      }
+    };
+    const r = await runPlan(sp, plan([level]), ctx(), { providers: guarded });
+    expect(clash).toBe(false);
+    expect(fake.maxInFlight).toBe(2); // list A's sequence alongside list B
+    expect(r.counts.created).toBe(4);
   });
 
   it("upgrades 'skip' to 'update' inside something created in this run", async () => {

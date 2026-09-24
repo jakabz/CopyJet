@@ -21,6 +21,11 @@ export interface IPlanStep {
   dependsOn: string[];
   /** 0-based; steps on the same level do not depend on each other and may run in parallel. */
   level: number;
+  /**
+   * What the step changes. Steps with the same lock run one after another: SharePoint fails concurrent schema
+   * changes of one list or of the web's columns/content types with random 500s (0x8007047E, 0x80131904).
+   */
+  lock: string;
 }
 
 export type ExclusionReason = 'disabled' | 'dependencyDisabled' | 'cycle';
@@ -64,6 +69,22 @@ export function templateNodes(template: ICopyJetTemplate): Array<{ ref: IArtifac
     ...listFieldDefs(template).map((d) => node('listField', artifactKeys.listField(d.listKey, d.field.internalName), d, listFieldDependencies(d))),
     ...listViewDefs(template).map((d) => node('view', artifactKeys.view(d.listKey, d.view.title), d, viewDependencies(d)))
   ];
+}
+
+/** The SharePoint schema a step changes (see IPlanStep.lock). */
+function lockOf(ref: IArtifactRef, def: StepDef): string {
+  switch (ref.kind) {
+    case 'listField':
+      return `list:${(def as IListFieldDef).listKey}`;
+    case 'view':
+      return `list:${(def as IListViewDef).listKey}`;
+    case 'siteField':
+      return 'web:fields';
+    case 'contentType':
+      return 'web:contentTypes';
+    default:
+      return ref.key;
+  }
 }
 
 const byKindThenKey = (a: { ref: IArtifactRef }, b: { ref: IArtifactRef }): number =>
@@ -117,7 +138,7 @@ export function buildPlan(template: ICopyJetTemplate, options: IPlanOptions = {}
   let ready = active.filter((n) => pending[n.ref.key] === 0);
   while (ready.length) {
     ready.sort(byKindThenKey);
-    const level = ready.map((n) => ({ ref: n.ref, def: n.def, dependsOn: n.deps, level: levels.length }));
+    const level = ready.map((n) => ({ ref: n.ref, def: n.def, dependsOn: n.deps, level: levels.length, lock: lockOf(n.ref, n.def) }));
     levels.push(level);
     const next: typeof active = [];
     ready.forEach((n) =>
