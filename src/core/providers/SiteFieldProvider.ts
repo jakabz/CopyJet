@@ -2,7 +2,7 @@ import type { SPFI } from '@pnp/sp';
 import '@pnp/sp/webs';
 import '@pnp/sp/fields';
 import { CopyJetError, throwIfAborted } from '../errors';
-import { compareFields, sanitizeFieldXml, toFieldDef, type IFieldInfoLike } from '../fields';
+import { compareFields, fieldUpdate, resolveFieldDef, sanitizeFieldXml, toFieldDef, type IFieldInfoLike } from '../fields';
 import type { ConflictMode, IApplyResult, IDiffResult, IField, IInstallContext, IProvider } from '../model';
 import { resolve } from '../tokenizer';
 
@@ -10,9 +10,6 @@ const SELECT = ['Id', 'InternalName', 'Title', 'TypeAsString', 'Group', 'Descrip
 
 /** SP.XmlSchemaFieldCreationInformation Options: AddFieldInternalNameHint – use the Name attribute as-is. */
 const ADD_FIELD_INTERNAL_NAME_HINT = 8;
-
-/** Changes the provider can apply to an existing field in 'update' mode. */
-const UPDATABLE = ['title', 'group', 'description', 'required', 'choices', 'defaultValue', 'customFormatter'];
 
 interface ISiteFieldDiff extends IDiffResult {
   target?: IFieldInfoLike;
@@ -24,14 +21,6 @@ const refOf = (def: IField): IDiffResult['ref'] => ({ kind: 'siteField', key: `f
 
 function isTaxonomy(def: IField): boolean {
   return def.type === 'TaxonomyFieldType' || def.type === 'TaxonomyFieldTypeMulti';
-}
-
-function union(a: string[] | undefined, b: string[] | undefined): string[] {
-  const out = (a || []).slice();
-  (b || []).forEach((c) => {
-    if (out.indexOf(c) < 0) out.push(c);
-  });
-  return out;
 }
 
 export class SiteFieldProvider implements IProvider<IField> {
@@ -56,7 +45,7 @@ export class SiteFieldProvider implements IProvider<IField> {
 
     const target = byName[0];
     const expected = toFieldDef(target, target.SchemaXml);
-    const changes = compareFields(this._resolved(def, ctx), expected);
+    const changes = compareFields(resolveFieldDef(def, ctx.tokens), expected);
     return { ref, status: changes.length ? 'different' : 'same', changes: changes.length ? changes : undefined, target };
   }
 
@@ -110,37 +99,16 @@ export class SiteFieldProvider implements IProvider<IField> {
   private async _update(sp: SPFI, def: IField, diff: ISiteFieldDiff, ctx: IInstallContext): Promise<IApplyResult> {
     const ref = diff.ref;
     const target = diff.target!;
-    const changes = diff.changes || [];
-    const skipped = changes.filter((c) => UPDATABLE.indexOf(c) < 0);
-    if (skipped.length) {
-      ctx.log.warn(`Not updatable on an existing column: ${skipped.join(', ')}.`, { artifact: ref, code: 'FIELD_PARTIAL_UPDATE', detail: skipped });
+    const update = fieldUpdate(resolveFieldDef(def, ctx.tokens), target, diff.changes || []);
+    if (update.notUpdatable.length) {
+      ctx.log.warn(`Not updatable on an existing column: ${update.notUpdatable.join(', ')}.`, { artifact: ref, code: 'FIELD_PARTIAL_UPDATE', detail: update.notUpdatable });
     }
-
-    const d = this._resolved(def, ctx);
-    const props: { [k: string]: unknown } = {};
-    if (changes.indexOf('title') >= 0) props.Title = d.title;
-    if (changes.indexOf('group') >= 0) props.Group = d.group || '';
-    if (changes.indexOf('description') >= 0) props.Description = d.description || '';
-    if (changes.indexOf('required') >= 0) props.Required = !!d.required;
-    if (changes.indexOf('defaultValue') >= 0) props.DefaultValue = d.defaultValue === undefined ? null : d.defaultValue;
-    if (changes.indexOf('customFormatter') >= 0) props.CustomFormatter = d.customFormatter || '';
-    if (changes.indexOf('choices') >= 0) {
-      // Never remove choices from the target: existing items may use them.
-      props.Choices = union(toFieldDef(target, target.SchemaXml).choices, d.choices);
-    }
-
-    if (Object.keys(props).length === 0) {
+    if (Object.keys(update.props).length === 0) {
       return this._done(ref, 'skipped', def, target.Id, ctx);
     }
-    await sp.web.availablefields.getById(target.Id).update(props, `SP.Field${d.type === 'Choice' || d.type === 'MultiChoice' ? d.type : ''}`);
-    ctx.log.info(`Site column updated: ${Object.keys(props).join(', ')}.`, { artifact: ref });
+    await sp.web.availablefields.getById(target.Id).update(update.props, update.fieldType);
+    ctx.log.info(`Site column updated: ${Object.keys(update.props).join(', ')}.`, { artifact: ref });
     return this._done(ref, 'updated', def, target.Id, ctx);
-  }
-
-  /** The definition with tokens in comparable properties resolved against the target. */
-  private _resolved(def: IField, ctx: IInstallContext): IField {
-    const r = (v: string | undefined): string | undefined => (v === undefined ? v : resolve(v, ctx.tokens));
-    return { ...def, title: r(def.title)!, defaultValue: def.defaultValue === null ? null : r(def.defaultValue), formula: r(def.formula) };
   }
 
   private async _idTaken(sp: SPFI, id: string): Promise<boolean> {

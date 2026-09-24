@@ -2,9 +2,8 @@ import type { SPFI } from '@pnp/sp';
 import '@pnp/sp/webs';
 import '@pnp/sp/fields';
 import { throwIfAborted } from '../errors';
-import { isCustomField, sanitizeFieldXml, setFieldXmlAttribute, toFieldDef, type IFieldInfoLike } from '../fields';
+import { isCustomField, templateFieldFrom, type IFieldInfoLike } from '../fields';
 import type { IArtifactRef, IDiscoveredArtifact, IExtractOptions, IExtractor, IField, ITemplateWriter } from '../model';
-import { tokenize } from '../tokenizer';
 
 /**
  * Visible site columns; the custom ones are picked client-side by SourceID (isCustomField), because the
@@ -48,21 +47,7 @@ export class SiteFieldExtractor implements IExtractor<IField> {
       .filter((f) => wanted.indexOf(siteFieldKey(f.InternalName)) >= 0)
       .forEach((f) => {
         const ref: IArtifactRef = { kind: this.kind, key: siteFieldKey(f.InternalName) };
-        const sanitized = sanitizeFieldXml(f.SchemaXml);
-        if (sanitized.removedAttributes.length || sanitized.removedElements.length) {
-          opts.log.info('Removed source-specific parts of SchemaXml.', {
-            artifact: ref,
-            code: 'FIELD_XML_SANITIZED',
-            detail: { attributes: sanitized.removedAttributes, elements: sanitized.removedElements }
-          });
-        }
-        // Site column IDs are kept as-is (content types reference them); everything else is tokenized.
-        const originalId = /\bID="([^"]*)"/.exec(sanitized.xml);
-        let xml = tokenize(sanitized.xml, opts.tokens);
-        if (originalId) {
-          xml = setFieldXmlAttribute(xml, 'ID', originalId[1]);
-        }
-        const def = toFieldDef(f, xml);
+        const def = templateFieldFrom(f, opts.tokens, opts.log, ref);
         this._warnings(def, ref, opts, out);
 
         const list = out.manifest.siteFields;
