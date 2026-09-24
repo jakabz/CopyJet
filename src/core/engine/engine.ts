@@ -51,7 +51,8 @@ function provider(providers: ProviderMap, step: IPlanStep): IProvider<StepDef> {
 
 /**
  * Runs a plan level by level (at most `concurrency` steps in flight within a level). A failed step blocks
- * its dependents; independent steps keep running. On abort, steps not started are 'cancelled' and the
+ * its dependents; independent steps keep running. A step whose dependency was created in this run runs in
+ * 'update' mode even when the mode is 'skip'. On abort, steps not started are 'cancelled' and the
  * partial result is returned. Providers register the identifiers they create in ctx.tokens themselves.
  */
 export async function runPlan(sp: SPFI, plan: IPlan, ctx: IInstallContext, options: IRunOptions): Promise<IRunResult> {
@@ -81,7 +82,12 @@ export async function runPlan(sp: SPFI, plan: IPlan, ctx: IInstallContext, optio
             return;
           }
           try {
-            const mode = (options.modes && options.modes[step.ref.key]) || options.mode || 'skip';
+            let mode = (options.modes && options.modes[step.ref.key]) || options.mode || 'skip';
+            // Inside something this run created (e.g. the default view of a new list) the template decides:
+            // nothing there predates the install, so 'skip' would only keep SharePoint's defaults.
+            if (mode === 'skip' && step.dependsOn.some((d) => results[d] && results[d].status === 'created')) {
+              mode = 'update';
+            }
             const r = await provider(options.providers, step).apply(sp, step.def, mode, ctx);
             finish(step, r.outcome);
           } catch (e) {

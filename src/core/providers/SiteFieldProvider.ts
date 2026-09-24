@@ -92,6 +92,12 @@ export class SiteFieldProvider implements IProvider<IField> {
     if (created.InternalName && created.InternalName !== def.internalName) {
       ctx.log.warn(`Column was created as ${created.InternalName}.`, { artifact: ref, code: 'FIELD_NAME_CHANGED' });
     }
+    // SchemaXml carries the site's default-language DisplayName; the template title is the one the user saw
+    // (multilingual sites). Setting it writes the installing user's language, as the UI does.
+    const title = resolve(def.title, ctx.tokens);
+    if (created.Title !== undefined && created.Title !== title) {
+      await sp.web.fields.getById(created.Id).update({ Title: title }, 'SP.Field');
+    }
     ctx.log.info('Site column created.', { artifact: ref });
     return this._done(ref, 'created', def, created.Id, ctx);
   }

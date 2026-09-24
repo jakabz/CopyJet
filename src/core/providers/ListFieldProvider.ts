@@ -105,6 +105,11 @@ export class ListFieldProvider implements IProvider<IListFieldDef> {
     if (created.InternalName && created.InternalName !== def.field.internalName) {
       ctx.log.warn(`Column was created as ${created.InternalName}.`, { artifact: ref, code: 'FIELD_NAME_CHANGED' });
     }
+    // SchemaXml carries the site's default-language DisplayName; the template title is what the user saw.
+    const title = resolve(def.field.title, ctx.tokens);
+    if (created.Title !== undefined && created.Title !== title) {
+      await sp.web.getList(this._listUrl(def, ctx)).fields.getById(created.Id).update({ Title: title }, 'SP.Field');
+    }
     ctx.log.info(siteColumn ? 'Site column added to the list.' : 'List column created.', { artifact: ref });
     return { ref, outcome: 'created' };
   }

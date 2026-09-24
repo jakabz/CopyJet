@@ -93,6 +93,13 @@ describe('runPlan', () => {
     expect(fake.calls.find((c) => c.key === 'l1')!.mode).toBe('update');
   });
 
+  it("upgrades 'skip' to 'update' inside something created in this run", async () => {
+    const fake = fakeProviders({ b: 'skipped' });
+    await runPlan(sp, sample(), ctx(), { providers: fake.providers, mode: 'skip' });
+    const modeOf = (key: string): ConflictMode => fake.calls.find((c) => c.key === key)!.mode;
+    expect([modeOf('a'), modeOf('b'), modeOf('c'), modeOf('d'), modeOf('e')]).toEqual(['skip', 'skip', 'update', 'skip', 'update']);
+  });
+
   it('stops on abort: finished steps kept, the rest cancelled', async () => {
     const ac = new AbortController();
     const fake = fakeProviders();

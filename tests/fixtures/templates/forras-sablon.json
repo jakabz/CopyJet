@@ -1,0 +1,191 @@
+{
+  "schemaVersion": "1.0",
+  "meta": {
+    "name": "Forrás sablon",
+    "createdBy": "admin@contoso.onmicrosoft.com",
+    "createdAt": "2026-09-24T14:03:38.339Z",
+    "sourceSiteUrl": "https://contoso.sharepoint.com/sites/Forras",
+    "sourceTenant": "contoso.sharepoint.com",
+    "sourceLcid": 1033,
+    "includesContent": false,
+    "generator": {
+      "name": "CopyJet",
+      "version": "0.0.1"
+    }
+  },
+  "siteFields": [
+    {
+      "internalName": "SiteColumn1",
+      "type": "Text",
+      "title": "SiteColumn1",
+      "schemaXml": "<Field Type=\"Text\" DisplayName=\"SiteColumn1\" Required=\"FALSE\" EnforceUniqueValues=\"FALSE\" Indexed=\"FALSE\" MaxLength=\"255\" Group=\"Egyéni oszlopok\" ID=\"{cd609c1e-c281-4da8-b74d-6a4f694a7f71}\" StaticName=\"SiteColumn1\" Name=\"SiteColumn1\"/>",
+      "id": "cd609c1e-c281-4da8-b74d-6a4f694a7f71",
+      "group": "Egyéni oszlopok"
+    },
+    {
+      "internalName": "SiteColumn2",
+      "type": "Number",
+      "title": "SiteColumn2",
+      "schemaXml": "<Field Type=\"Number\" DisplayName=\"SiteColumn2\" Required=\"FALSE\" EnforceUniqueValues=\"FALSE\" Indexed=\"FALSE\" Group=\"Egyéni oszlopok\" ID=\"{f7fd2da5-d7c9-49c6-b92d-0f7c66525df4}\" StaticName=\"SiteColumn2\" Name=\"SiteColumn2\"/>",
+      "id": "f7fd2da5-d7c9-49c6-b92d-0f7c66525df4",
+      "group": "Egyéni oszlopok"
+    }
+  ],
+  "contentTypes": [],
+  "lists": [
+    {
+      "key": "Teszt_lista",
+      "url": "Lists/Teszt lista",
+      "title": "Teszt lista",
+      "template": 100,
+      "content": {
+        "mode": "none"
+      },
+      "onQuickLaunch": true,
+      "enableVersioning": true,
+      "majorVersionLimit": 50,
+      "enableModeration": false,
+      "enableFolderCreation": false,
+      "contentTypesEnabled": false,
+      "enableAttachments": true,
+      "fields": [
+        {
+          "internalName": "Valaki",
+          "type": "User",
+          "title": "Valaki",
+          "schemaXml": "<Field DisplayName=\"Valaki\" Format=\"Dropdown\" List=\"UserInfo\" Name=\"Valaki\" Type=\"User\" UserSelectionMode=\"0\" UserSelectionScope=\"0\" ID=\"{342b8a00-8917-45d2-9cb7-ff00564691e0}\" StaticName=\"Valaki\"/>",
+          "id": "342b8a00-8917-45d2-9cb7-ff00564691e0",
+          "group": "Egyéni oszlopok"
+        },
+        {
+          "internalName": "V_x00e1_lassz",
+          "type": "Choice",
+          "title": "Válassz",
+          "schemaXml": "<Field DisplayName=\"Válassz\" FillInChoice=\"FALSE\" Format=\"Dropdown\" Name=\"V_x00e1_lassz\" Type=\"Choice\" ID=\"{21ee4341-cdb8-42eb-97fb-568547c51314}\" StaticName=\"V_x00e1_lassz\"><CHOICES><CHOICE>Egy</CHOICE><CHOICE>Kettő</CHOICE><CHOICE>Három</CHOICE></CHOICES></Field>",
+          "id": "21ee4341-cdb8-42eb-97fb-568547c51314",
+          "group": "Egyéni oszlopok",
+          "choices": [
+            "Egy",
+            "Kettő",
+            "Három"
+          ]
+        },
+        {
+          "internalName": "Lookup",
+          "type": "Lookup",
+          "title": "Lookup",
+          "schemaXml": "<Field Type=\"Lookup\" DisplayName=\"Lookup\" List=\"{{listkey:Teszt_lookup_forrs}}\" ShowField=\"Title\" ID=\"{b1261863-c193-42a3-a6f9-8563b125dccc}\" StaticName=\"Lookup\" Name=\"Lookup\"/>",
+          "id": "b1261863-c193-42a3-a6f9-8563b125dccc",
+          "group": "Egyéni oszlopok",
+          "lookupList": "{{listkey:Teszt_lookup_forrs}}",
+          "lookupField": "Title"
+        },
+        {
+          "internalName": "SiteColumn1",
+          "type": "Text",
+          "title": "SiteColumn1",
+          "schemaXml": "<Field Type=\"Text\" DisplayName=\"SiteColumn1\" ID=\"{cd609c1e-c281-4da8-b74d-6a4f694a7f71}\" StaticName=\"SiteColumn1\" Name=\"SiteColumn1\"/>",
+          "id": "cd609c1e-c281-4da8-b74d-6a4f694a7f71",
+          "group": "Egyéni oszlopok"
+        },
+        {
+          "internalName": "SiteColumn2",
+          "type": "Number",
+          "title": "SiteColumn2",
+          "schemaXml": "<Field Type=\"Number\" DisplayName=\"SiteColumn2\" ID=\"{f7fd2da5-d7c9-49c6-b92d-0f7c66525df4}\" StaticName=\"SiteColumn2\" Name=\"SiteColumn2\"/>",
+          "id": "f7fd2da5-d7c9-49c6-b92d-0f7c66525df4",
+          "group": "Egyéni oszlopok"
+        },
+        {
+          "internalName": "ListaSzoveg",
+          "type": "Text",
+          "title": "Szöveg",
+          "schemaXml": "<Field DisplayName=\"ListaSzoveg\" Format=\"Dropdown\" MaxLength=\"255\" Name=\"ListaSzoveg\" Type=\"Text\" ID=\"{d2a506e5-22a2-458a-8901-3ebf0463ee16}\" StaticName=\"ListaSzoveg\" CustomFormatter=\"\" Required=\"FALSE\" EnforceUniqueValues=\"FALSE\" Indexed=\"FALSE\"/>",
+          "id": "d2a506e5-22a2-458a-8901-3ebf0463ee16",
+          "group": "Egyéni oszlopok"
+        },
+        {
+          "internalName": "ListaLookup",
+          "type": "Lookup",
+          "title": "Keresés",
+          "schemaXml": "<Field Type=\"Lookup\" DisplayName=\"ListaLookup\" List=\"{{listkey:Teszt_lookup_forrs}}\" ShowField=\"Title\" ID=\"{f3e49dcc-a791-43a3-b438-1a6b675485ef}\" StaticName=\"ListaLookup\" Name=\"ListaLookup\" Group=\"\"/>",
+          "id": "f3e49dcc-a791-43a3-b438-1a6b675485ef",
+          "group": "Egyéni oszlopok",
+          "lookupList": "{{listkey:Teszt_lookup_forrs}}",
+          "lookupField": "Title"
+        }
+      ],
+      "views": [
+        {
+          "title": "Minden elem",
+          "fields": [
+            "LinkTitle",
+            "Valaki",
+            "V_x00e1_lassz",
+            "Lookup",
+            "SiteColumn1",
+            "SiteColumn2",
+            "ListaSzoveg",
+            "ListaLookup"
+          ],
+          "default": true,
+          "rowLimit": 30,
+          "paged": true,
+          "scope": "Default",
+          "viewType": "HTML"
+        },
+        {
+          "title": "Nyitott elemek",
+          "fields": [
+            "LinkTitle",
+            "Valaki",
+            "V_x00e1_lassz",
+            "Lookup",
+            "SiteColumn1",
+            "SiteColumn2",
+            "ListaSzoveg",
+            "ListaLookup"
+          ],
+          "query": "<OrderBy><FieldRef Name=\"ListaSzoveg\" /></OrderBy><Where><IsNotNull><FieldRef Name=\"ListaSzoveg\" /></IsNotNull></Where>",
+          "rowLimit": 30,
+          "paged": true,
+          "scope": "Default",
+          "viewType": "HTML"
+        },
+        {
+          "title": "Ügyfél nézet",
+          "fields": [
+            "LinkTitle",
+            "SiteColumn1",
+            "SiteColumn2",
+            "ListaSzoveg",
+            "ListaLookup"
+          ],
+          "rowLimit": 30,
+          "paged": true,
+          "scope": "Default",
+          "viewType": "HTML"
+        }
+      ]
+    },
+    {
+      "key": "Teszt_lookup_forrs",
+      "url": "Lists/Teszt lookup forrs",
+      "title": "Teszt lookup forrás",
+      "template": 100,
+      "content": {
+        "mode": "none"
+      },
+      "onQuickLaunch": true,
+      "enableVersioning": true,
+      "majorVersionLimit": 50,
+      "enableModeration": false,
+      "enableFolderCreation": false,
+      "contentTypesEnabled": false,
+      "enableAttachments": true
+    }
+  ],
+  "groups": [],
+  "pages": [],
+  "principals": []
+}

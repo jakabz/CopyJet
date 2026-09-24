@@ -1,5 +1,62 @@
-.copyJetInstall {
-  padding: 1em;
-  color: "[theme:bodyText, default: #323130]";
-  color: var(--bodyText);
+.drop {
+  border: 2px dashed "[theme:neutralTertiaryAlt, default: #c8c6c4]";
+  border-radius: 4px;
+  padding: 20px;
+}
+
+.dragging {
+  border-color: "[theme:themePrimary, default: #0078d4]";
+  background: "[theme:themeLighterAlt, default: #eff6fc]";
+}
+
+.hidden {
+  display: none;
+}
+
+.facts th {
+  text-align: left;
+  padding: 2px 16px 2px 0;
+  font-weight: 600;
+  vertical-align: top;
+}
+
+.preview {
+  border-collapse: collapse;
+  width: 100%;
+
+  th {
+    text-align: left;
+    border-bottom: 1px solid "[theme:neutralLight, default: #edebe9]";
+    padding: 4px 8px;
+  }
+
+  td {
+    padding: 2px 8px;
+    border-bottom: 1px solid "[theme:neutralLighter, default: #f3f2f1]";
+    vertical-align: middle;
+  }
+}
+
+.new td:last-child {
+  color: "[theme:themePrimary, default: #0078d4]";
+}
+
+.different td:last-child {
+  color: "[theme:warningText, default: #8a6d3b]";
+}
+
+.unsupported td:last-child,
+.error td:last-child {
+  color: "[theme:errorText, default: #a4262c]";
+}
+
+.off {
+  color: "[theme:neutralTertiary, default: #a19f9d]";
+}
+
+.count {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 90px;
 }

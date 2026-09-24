@@ -198,6 +198,17 @@ describe('ListFieldProvider', () => {
     expect(target.requests.filter((r) => r.method === 'POST').length).toBe(posts);
   });
 
+  it('sets the template title when it differs from the SchemaXml DisplayName (multilingual site)', async () => {
+    const writer = await extract();
+    const target = targetSite();
+    const c = ctx();
+    const def = defOf(writer, 'Valaki');
+    const localized = { ...def, field: { ...def.field, title: 'Felelős személy' } };
+    expect(await provider.apply(target.sp, localized, 'skip', c)).toMatchObject({ outcome: 'created' });
+    expect(target.fields[LIST].find((x) => x.InternalName === 'Valaki')!.Title).toBe('Felelős személy');
+    expect((await provider.diff(target.sp, localized, c)).status).toBe('same');
+  });
+
   it('update mode merges choices, skip mode leaves the column alone', async () => {
     const writer = await extract();
     const existing = { ...valassz, SchemaXml: valassz.SchemaXml.replace(/<CHOICES>.*<\/CHOICES>/, '<CHOICES><CHOICE>Egy</CHOICE><CHOICE>Három</CHOICE></CHOICES>') };
