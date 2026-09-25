@@ -4,8 +4,8 @@ import { throwIfAborted } from '../errors';
 import { limitConcurrency } from '../http/concurrency';
 import { loadSourceSite } from '../lists/sourceTokens';
 import type { Logger } from '../logger/Logger';
-import type { ArtifactKind, IArtifactRef, ICopyJetTemplate, IDiscoveredArtifact } from '../model';
-import { JsonTemplateWriter, createEmptyTemplate } from '../packager';
+import type { ArtifactKind, IArtifactRef, ICopyJetTemplate, IDiscoveredArtifact, ITemplateWriter } from '../model';
+import { JsonTemplateWriter, ZipTemplateWriter, createEmptyTemplate } from '../packager';
 import { templateNodes } from '../planner/planner';
 import { createExtractors } from './registry';
 
@@ -49,7 +49,9 @@ export interface IExtractRequest {
 }
 
 export interface IExtractResult {
-  writer: JsonTemplateWriter;
+  writer: ITemplateWriter;
+  /** 'zip' when the template carries content (items, files), else 'json'. */
+  format: 'json' | 'zip';
   /** Discovered, copyable artifacts the template depends on but that were not selected. */
   missing: IDiscoveredArtifact[];
 }
@@ -65,8 +67,8 @@ export function missingDependencies(template: ICopyJetTemplate, discovered: IDis
 }
 
 /**
- * Extracts the selected artifacts into a .json template. Extractors run in registry order (lists before
- * their columns and views). Returns the writer – finalize() validates and produces the file – and the
+ * Extracts the selected artifacts into a template (.zip when it carries content, else .json). Extractors run
+ * in registry order (lists before their columns, views and items). Returns the writer – finalize() validates and produces the file – and the
  * dependencies still missing from the selection.
  */
 export async function extractTemplate(sp: SPFI, req: IExtractRequest): Promise<IExtractResult> {
@@ -75,18 +77,18 @@ export async function extractTemplate(sp: SPFI, req: IExtractRequest): Promise<I
     sp.web.select('Url', 'Language')<{ Url: string; Language: number }>(),
     loadSourceSite(sp, req.signal)
   ]);
-  const writer = new JsonTemplateWriter(
-    createEmptyTemplate({
-      name: req.name,
-      description: req.description || undefined,
-      createdBy: req.createdBy,
-      createdAt: new Date().toISOString(),
-      sourceSiteUrl: web.Url,
-      sourceTenant: web.Url.replace(/^https?:\/\//i, '').split('/')[0],
-      sourceLcid: web.Language,
-      includesContent: false
-    })
-  );
+  const format = req.refs.some((r) => r.kind === 'items' || r.kind === 'files') ? 'zip' : 'json';
+  const manifest = createEmptyTemplate({
+    name: req.name,
+    description: req.description || undefined,
+    createdBy: req.createdBy,
+    createdAt: new Date().toISOString(),
+    sourceSiteUrl: web.Url,
+    sourceTenant: web.Url.replace(/^https?:\/\//i, '').split('/')[0],
+    sourceLcid: web.Language,
+    includesContent: false
+  });
+  const writer: ITemplateWriter = format === 'zip' ? new ZipTemplateWriter(manifest) : new JsonTemplateWriter(manifest);
   if (!writer.manifest.meta.description) {
     delete writer.manifest.meta.description;
   }
@@ -101,5 +103,5 @@ export async function extractTemplate(sp: SPFI, req: IExtractRequest): Promise<I
     req.log.info(`Extracted: ${refs.length} × ${e.kind}.`, { step: e.kind });
   }
   if (req.onProgress) req.onProgress(extractors.length, extractors.length);
-  return { writer, missing: missingDependencies(writer.manifest, req.discovered) };
+  return { writer, format, missing: missingDependencies(writer.manifest, req.discovered) };
 }

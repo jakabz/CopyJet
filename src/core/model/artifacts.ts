@@ -7,6 +7,7 @@ export type ArtifactKind =
   | 'view'
   | 'listSecurity'
   | 'items'
+  | 'itemLookups'
   | 'files'
   | 'page'
   | 'navigation';

@@ -228,7 +228,7 @@ export interface IExtractor<TDef> {
 | `ViewExtractor` | Nyilvános, látható nézetek (nem `Hidden`, nem `PersonalView`) | `views` – `ViewQuery` (tokenizálva), `viewfields`, `RowLimit`, `Paged`, `Scope`, `CustomFormatter`; a lista bejegyzésébe (`lists[].views`) ír, `docs/spikes/06` |
 | `GroupExtractor` | A site saját SP-csoportjai (webes jogosultsággal, az alapcsoportok nélkül), jogosultsági szintek, tulajdonos | `siteGroups`, `roleAssignments`; cím `{sitename} …` alakban; beépített szint angol néven (`RoleTypeKind` szerint), egyedi a saját nevén; felhasználó tulajdonos helyett `{associatedownergroup}` (2. fázisig); tagok csak ha `includeMembers` (2. fázis), `docs/spikes/07` |
 | `ListSecurityExtractor` | Egyedi listajogosultság | `HasUniqueRoleAssignments`, `roleAssignments.expand("Member,RoleDefinitionBindings")` |
-| `ItemExtractor` | Listaelemek, mellékletek | `RenderListDataAsStream` lapozással (`Paging`), mezőtípus szerinti szerializálás |
+| `ItemExtractor` | Listaelemek (a mappák a `ListExtractor`-ban), mellékletek | `items` `ID gt N` szűrésű, ID szerint rendezett 2000-es lapokban (indexelt, a nézetküszöb alatt); a személy és a lookup mező `<mező>Id` alakban (nincs `$expand`, nincs lookup-küszöb). A felhasználók a `siteusers`-ből `{principal:key}` tokenként kerülnek a `principals`-be; a rendszerfiók és az SP-csoport nem. Tartalomtípus: a szülő site-tartalomtípus ID-ja. Kimenet: `items/<listkey>.json`, `docs/spikes/08` |
 | `FileExtractor` | Fájlok, metaadatok, opcionálisan verziók | `getFileByServerRelativePath().getBlob()`, `versions`; blob a packagerbe |
 | `PageExtractor` | Modern lapok, SiteAssets képek | `sp.web.loadClientsidePage()`, `CanvasContent1`, `LayoutWebpartsContent`; kép-URL-ek kigyűjtése |
 | `NavigationExtractor` | Bal oldali és felső menü | `web.navigation.quicklaunch` / `topNavigationBar`, `children` rekurzívan |
@@ -265,7 +265,8 @@ export interface IProvider<TDef> {
 | `ListFieldProvider` | `createFieldAsXml` a listán (`Options: 12`), lookupok `{listkey}` feloldásával | Második körben fut, amikor minden lista létezik; ha a mező ID-jával van site column a célon, annak saját `SchemaXml`-jéből jön létre (kötött példány), különben a sablonéból; átnevezett listánál a `{listurl}` token adja az URL-t |
 | `ViewProvider` | `views.add(cím, false, { ViewQuery, RowLimit, Paged })`, `viewfields` csere, `MERGE` (`Scope`, `CustomFormatter`, `DefaultView`) | Az alapnézet a `default` jelző szerint párosul (a címe nyelvfüggő), a többi cím szerint; a cím szerinti létrehozás a forrással azonos URL-t ad; GRID és CALENDAR nézet az 1. verzióban nem (a `ViewTypeKind` nem `SP.View`-tulajdonság) |
 | `ListSecurityProvider` | `breakRoleInheritance(false)` + `roleAssignments.add` | Csak ha a forrásban egyedi volt |
-| `ItemProvider` | `addValidateUpdateItemUsingPath` batch-ben (100) | Mappák előbb; lookupok második körben az `IdMap`-pel; Author/Editor/Created/Modified beállítása |
+| `ItemProvider` | `addValidateUpdateItemUsingPath` batch-ben (100) | Csak üres (legfeljebb mappákat tartalmazó) céllistába ír: futási állapot nélkül nem tudható, mit írt be egy korábbi futás, duplikálni pedig nem szabad. A szám és a dátum a **cél web** területi beállítása szerint szövegként megy (`items/locale.ts`, a helyi idő a SharePoint `utcToLocalTime`-jából, naponta egy hívással). A hiányzó mappák előbb készülnek (különben HTTP 500), a tartalomtípus `ContentTypeId`-vel, az Author/Editor/Created/Modified ugyanabban a hívásban. Mezőszintű hiba (`HasException`) esetén az elem nem jön létre: figyelmeztetés, ha pedig egy sem sikerül, a lépés hibás. A lookupok kimaradnak, az `IdMap` kitöltődik, `docs/spikes/08` |
+| `ItemLookupProvider` | `items(id).validateUpdateListItem` | Második kör (`itemLookups:<lista>`): a lista és a lookup-céllisták elemei után fut, az `IdMap`-ekkel képez le. LookupMulti `a;#;#b` alakban; az Editor és a Modified újra megy, hogy megmaradjon. Lookup-körök egymásra nem várnak, így a ciklikus lookup (A → B → A) is települ |
 | `FileProvider` | `http.uploadFile`, majd metaadat-írás | Verzióknál sorrendi feltöltés + `validateUpdateListItem` `bNewDocumentUpdate: true`; hivatkozásos módban `createCopyJobs` |
 | `PageProvider` | `ClientsidePage` létrehozás, vászon betöltés `deepResolve` után, `save()` + publikálás | Előtte `GetClientSideWebParts` ellenőrzés; SiteAssets képek feltöltése előbb |
 | `NavigationProvider` | `quicklaunch.add` / `topNavigationBar.add`, gyerekekkel | Hozzáfűzés duplikációszűréssel vagy csere; kezdőlap beállítása (`rootFolder.update({WelcomePage})`) |
@@ -434,10 +435,10 @@ A fejlesztés a rendszerterv fázisait követi; minden fázis végén működő,
 
 **2. fázis – Tartalom**
 
-- [ ] `FieldValueSerializer` minden támogatott mezőtípusra
-- [ ] `ItemExtractor` / `ItemProvider`, mellékletek, `IdMap`, lookup második kör
+- [x] `FieldValueSerializer` minden támogatott mezőtípusra (Text, Note, Number/Currency/Integer, Boolean, Choice, MultiChoice, DateTime, URL, User/UserMulti, Lookup/LookupMulti; Managed Metadata a `TermMapper`-rel, Image a fájlokkal jön, addig figyelmeztetés) – `docs/spikes/08`
+- [ ] `ItemExtractor` / `ItemProvider`, mellékletek, `IdMap`, lookup második kör – kész: elemek, `IdMap`, lookup második kör (`ItemLookupProvider`), `PrincipalMapper` alap (azonos login → azonos e-mail); hátra van: mellékletek, Setup/Install felület
 - [ ] `FileExtractor` / `FileProvider`, chunked upload, opcionális verziók
-- [ ] `packager` – `.zip`, checksum
+- [ ] `packager` – `.zip`, checksum – kész: `.zip` írás/olvasás (`ZipTemplateWriter`, bejegyzések sémavalidálása, útvonal-ellenőrzés); hátra van: checksum
 - [ ] `mapping`: `PrincipalMapper`, `TermMapper`, Install `MappingStep`
 
 **3. fázis – Lapok és navigáció**

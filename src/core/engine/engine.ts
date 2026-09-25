@@ -1,5 +1,5 @@
 import type { SPFI } from '@pnp/sp';
-import { AbortError, CopyJetError } from '../errors';
+import { AbortError, CopyJetError, isAbortError } from '../errors';
 import { limitConcurrency } from '../http/concurrency';
 import type { ArtifactKind, ConflictMode, DiffStatus, IArtifactRef, IInstallContext, IProvider } from '../model';
 import type { IPlan, IPlanStep, StepDef } from '../planner';
@@ -39,7 +39,7 @@ export interface IRunResult {
   aborted: boolean;
 }
 
-const isAbort = (e: unknown): boolean => e instanceof AbortError || (typeof e === 'object' && e !== null && (e as Error).name === 'AbortError');
+const isAbort = isAbortError;
 
 function provider(providers: ProviderMap, step: IPlanStep): IProvider<StepDef> {
   const p = providers[step.ref.kind];

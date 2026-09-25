@@ -3,6 +3,7 @@ import type { ArtifactKind, IArtifactRef, IDiscoveredArtifact } from './artifact
 import type { ICopyJetTemplate } from './generated/copyjet.v1';
 import type { TokenContext } from '../tokenizer/TokenContext';
 import type { Logger } from '../logger/Logger';
+import type { PrincipalMapper } from '../mapping/PrincipalMapper';
 
 /** Receives extracted data; hides the package format (.json / .zip) from the extractors. */
 export interface ITemplateWriter {
@@ -59,12 +60,24 @@ export interface IApplyResult {
   tokens?: Record<string, Record<string, string>>;
 }
 
+/** Shared state of content steps (items, files) within one install run. */
+export interface IContentContext {
+  /** The loaded package: item and file entries are read from it. */
+  reader: ITemplateReader;
+  /** Source item ID → target item ID per list key; fills as item steps run, used to resolve lookups. */
+  idMaps: { [listKey: string]: { [sourceId: number]: number } };
+  /** Template principals → target users ({principal:key} tokens). */
+  principals: PrincipalMapper;
+}
+
 export interface IInstallContext {
   targetSiteUrl: string;
   /** Target-site values; providers register the identifiers they create. */
   tokens: TokenContext;
   log: Logger;
   signal?: AbortSignal;
+  /** Present when the template carries content (items, files). */
+  content?: IContentContext;
 }
 
 export interface IProvider<TDef> {

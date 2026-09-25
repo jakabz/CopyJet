@@ -1,3 +1,4 @@
+import { listItemsDefs, type IListItemsDef } from '../items/itemsModel';
 import { listFieldDefs, type IListFieldDef } from '../lists/listFields';
 import { listViewDefs, type IListViewDef } from '../lists/views';
 import type { ArtifactKind, IArtifactRef, IContentType, ICopyJetTemplate, IField, IGroup, IList } from '../model';
@@ -5,6 +6,8 @@ import {
   artifactKeys,
   contentTypeDependencies,
   groupDependencies,
+  itemLookupsDependencies,
+  itemsDependencies,
   listDependencies,
   listFieldDependencies,
   siteFieldDependencies,
@@ -12,7 +15,7 @@ import {
 } from './dependencies';
 
 /** Provider input per kind. */
-export type StepDef = IGroup | IField | IContentType | IList | IListFieldDef | IListViewDef;
+export type StepDef = IGroup | IField | IContentType | IList | IListFieldDef | IListViewDef | IListItemsDef;
 
 export interface IPlanStep {
   ref: IArtifactRef;
@@ -49,8 +52,8 @@ export interface IPlanOptions {
   disabled?: string[];
 }
 
-/** Install order within a level (rendszerterv §6): groups, site columns, content types, lists, list columns, views. */
-const KIND_ORDER: ArtifactKind[] = ['group', 'siteField', 'contentType', 'list', 'listField', 'view'];
+/** Install order within a level (rendszerterv §6): groups, site columns, content types, lists, list columns, views, content. */
+const KIND_ORDER: ArtifactKind[] = ['group', 'siteField', 'contentType', 'list', 'listField', 'view', 'items', 'itemLookups'];
 
 function node(kind: ArtifactKind, key: string, def: StepDef, deps: IArtifactRef[]): { ref: IArtifactRef; def: StepDef; deps: string[] } {
   return { ref: { kind, key }, def, deps: deps.map((d) => d.key) };
@@ -67,7 +70,11 @@ export function templateNodes(template: ICopyJetTemplate): Array<{ ref: IArtifac
     ...template.contentTypes.map((c) => node('contentType', artifactKeys.contentType(c.id), c, contentTypeDependencies(c))),
     ...template.lists.map((l) => node('list', artifactKeys.list(l.key), l, listDependencies(l))),
     ...listFieldDefs(template).map((d) => node('listField', artifactKeys.listField(d.listKey, d.field.internalName), d, listFieldDependencies(d))),
-    ...listViewDefs(template).map((d) => node('view', artifactKeys.view(d.listKey, d.view.title), d, viewDependencies(d)))
+    ...listViewDefs(template).map((d) => node('view', artifactKeys.view(d.listKey, d.view.title), d, viewDependencies(d))),
+    ...listItemsDefs(template).map((d) => node('items', artifactKeys.items(d.listKey), d, itemsDependencies(d, template.lists.filter((l) => l.key === d.listKey)[0]))),
+    ...listItemsDefs(template)
+      .filter((d) => d.lookupTargets.length > 0)
+      .map((d) => node('itemLookups', artifactKeys.itemLookups(d.listKey), d, itemLookupsDependencies(d)))
   ];
 }
 
