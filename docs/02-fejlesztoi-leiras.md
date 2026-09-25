@@ -342,7 +342,7 @@ sablon.zip
 
 A Setup egy négylépéses varázsló (Kiválasztás → Opciók → Összesítő → Export); az állapotot egy `useReducer`-alapú store tartja, a logikát a core végzi. UI-vázlat: `docs/ui/`.
 
-**A felület a `docs/ui` vázlatait követi** (kártya, lépésjelző, lábléc, címkék, statisztikai kártyák, naplópanel – `shared/components/ui.tsx`, `ui.module.scss`, `shared/styles/_tokens.scss`). A még nem elérhető funkciók (tartalom, verziók, tagok, `.zip`, sablontár, leképezés) a vázlat helyén **letiltva, „(2. fázis)” jelzéssel** jelennek meg; tartalomhoz kötött számlálók (elemek, fájlok, méret) helyett az 1. fázisban értelmes adatok (oszlopok, nézetek, csoportok) szerepelnek. Az Összesítő egy próbakinyeréssel mutatja a hiányzó függőségeket; a végleges kinyerés az Export lépésben fut.
+**A felület a `docs/ui` vázlatait követi** (kártya, lépésjelző, lábléc, címkék, statisztikai kártyák, naplópanel – `shared/components/ui.tsx`, `ui.module.scss`, `shared/styles/_tokens.scss`). A még nem elérhető funkciók (tárak fájljai, verziók, tagok, sablontár, tartománycsere/CSV-leképezés) a vázlat helyén **letiltva, „(2. fázis)” jelzéssel** jelennek meg; a listaelemek másolása és a `.zip` 2026-09-25 óta elérhető; tartalomhoz kötött számlálók (elemek, fájlok, méret) helyett az 1. fázisban értelmes adatok (oszlopok, nézetek, csoportok) szerepelnek. Az Összesítő egy próbakinyeréssel mutatja a hiányzó függőségeket; a végleges kinyerés az Export lépésben fut.
 
 | Komponens | Feladat | Megoldás |
 | --- | --- | --- |
@@ -436,7 +436,7 @@ A fejlesztés a rendszerterv fázisait követi; minden fázis végén működő,
 **2. fázis – Tartalom**
 
 - [x] `FieldValueSerializer` minden támogatott mezőtípusra (Text, Note, Number/Currency/Integer, Boolean, Choice, MultiChoice, DateTime, URL, User/UserMulti, Lookup/LookupMulti; Managed Metadata a `TermMapper`-rel, Image a fájlokkal jön, addig figyelmeztetés) – `docs/spikes/08`
-- [ ] `ItemExtractor` / `ItemProvider`, mellékletek, `IdMap`, lookup második kör – kész: elemek, `IdMap`, lookup második kör (`ItemLookupProvider`), `PrincipalMapper` alap (azonos login → azonos e-mail); hátra van: mellékletek, Setup/Install felület
+- [ ] `ItemExtractor` / `ItemProvider`, mellékletek, `IdMap`, lookup második kör – kész: elemek, `IdMap`, lookup második kör (`ItemLookupProvider`), `PrincipalMapper` alap (azonos login → azonos e-mail); felület: Setup listánként „Szerkezet + tartalom”, szerzők megőrzése, automatikus `.zip`; Install `.zip` betöltés, felhasználó-keresés a Leképezés lépésben, elemlépések az előnézetben és a futásban; hátra van: mellékletek
 - [ ] `FileExtractor` / `FileProvider`, chunked upload, opcionális verziók
 - [ ] `packager` – `.zip`, checksum – kész: `.zip` írás/olvasás (`ZipTemplateWriter`, bejegyzések sémavalidálása, útvonal-ellenőrzés); hátra van: checksum
 - [ ] `mapping`: `PrincipalMapper`, `TermMapper`, Install `MappingStep`

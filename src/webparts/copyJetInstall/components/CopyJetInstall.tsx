@@ -1,6 +1,7 @@
 import * as React from 'react';
 import * as strings from 'CopyJetInstallWebPartStrings';
 import { Logger } from '../../../core/logger';
+import { PrincipalMapper } from '../../../core/mapping';
 import type { ConflictMode, ITemplateReader } from '../../../core/model';
 import { downloadLog } from '../../../shared/components/LogViewer';
 import { WizardShell } from '../../../shared/components/WizardShell';
@@ -15,6 +16,8 @@ import type { ICopyJetInstallProps } from './ICopyJetInstallProps';
 interface IInstallState {
   step: number;
   reader?: ITemplateReader;
+  /** One mapper per loaded template: the mapping step fills it, the install reuses it. */
+  principals?: PrincipalMapper;
   fileName?: string;
   permissionsOk?: boolean;
   disabled: string[];
@@ -49,13 +52,13 @@ const CopyJetInstall: React.FC<ICopyJetInstallProps> = ({ sp, siteTitle, siteUrl
         targetUrl={siteUrl}
         reader={state.reader}
         fileName={state.fileName}
-        onLoaded={(reader, fileName) => update({ reader, fileName, disabled: [], modes: {} })}
+        onLoaded={(reader, fileName) => update({ reader, fileName, principals: reader ? new PrincipalMapper(sp, reader.manifest.principals) : undefined, disabled: [], modes: {} })}
         onPermissions={(ok) => update({ permissionsOk: ok })}
       />
     );
     footerEnd = <Button text={strings.Next} kind="primary" disabled={!template || !state.permissionsOk} onClick={() => update({ step: 1 })} />;
   } else if (state.step === 1) {
-    body = <MappingStep template={template} />;
+    body = <MappingStep template={template} principals={state.principals!} />;
     footerEnd = (
       <>
         <Button text={strings.Back} onClick={() => update({ step: 0 })} />
@@ -86,7 +89,8 @@ const CopyJetInstall: React.FC<ICopyJetInstallProps> = ({ sp, siteTitle, siteUrl
       <InstallRun
         key={state.runId}
         sp={sp}
-        template={template}
+        reader={state.reader!}
+        principals={state.principals!}
         targetSiteTitle={siteTitle}
         disabled={state.disabled}
         mode={state.mode}

@@ -29,6 +29,8 @@ export interface IExtractOptions {
   includeContent: boolean;
   includeVersions: boolean;
   includeMembers: boolean;
+  /** Items keep their author, editor and dates (default true). */
+  preserveAuthors?: boolean;
   /** Source-site values to tokenize (site URLs, list GUIDs → {listkey:X} ...). */
   tokens: TokenContext;
   log: Logger;

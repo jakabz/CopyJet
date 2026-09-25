@@ -9,7 +9,7 @@ import { ExportStep, type ExportStatus } from './ExportStep';
 import { OptionsStep } from './OptionsStep';
 import { SelectStep } from './SelectStep';
 import { SummaryStep } from './SummaryStep';
-import { format, selectedArtifacts, selectedRefs } from './selection';
+import { contentRefs, format, selectedArtifacts, selectedRefs } from './selection';
 import type { ICopyJetSetupProps } from './ICopyJetSetupProps';
 
 export function kindLabel(kind: ArtifactKind): string {
@@ -19,7 +19,9 @@ export function kindLabel(kind: ArtifactKind): string {
     contentType: strings.KindContentType,
     list: strings.KindList,
     listField: strings.KindListField,
-    view: strings.KindView
+    view: strings.KindView,
+    items: strings.KindItems,
+    itemLookups: strings.KindItemLookups
   };
   return labels[kind] || kind;
 }
@@ -40,6 +42,9 @@ interface ISetupState {
   selected: string[];
   name: string;
   description: string;
+  /** List keys copied with their items (off by default). */
+  content: string[];
+  preserveAuthors: boolean;
   /** Remounts the export step for a new extraction. */
   runId: number;
   exportStatus?: ExportStatus;
@@ -52,6 +57,8 @@ type Action =
   | { type: 'step'; step: number }
   | { type: 'name'; name: string }
   | { type: 'description'; description: string }
+  | { type: 'content'; key: string; on: boolean }
+  | { type: 'preserveAuthors'; on: boolean }
   | { type: 'export' }
   | { type: 'exportStatus'; status: ExportStatus }
   | { type: 'addMissing'; keys: string[] }
@@ -71,6 +78,10 @@ function reducer(state: ISetupState, action: Action): ISetupState {
       return { ...state, name: action.name };
     case 'description':
       return { ...state, description: action.description };
+    case 'content':
+      return { ...state, content: state.content.filter((k) => k !== action.key).concat(action.on ? [action.key] : []) };
+    case 'preserveAuthors':
+      return { ...state, preserveAuthors: action.on };
     case 'export':
       return { ...state, step: 3, runId: state.runId + 1, exportStatus: 'running' };
     case 'exportStatus':
@@ -78,15 +89,15 @@ function reducer(state: ISetupState, action: Action): ISetupState {
     case 'addMissing':
       return { ...state, selected: state.selected.concat(action.keys.filter((k) => state.selected.indexOf(k) < 0)) };
     case 'reset':
-      return { ...state, step: 0, selected: [], exportStatus: undefined };
+      return { ...state, step: 0, selected: [], content: [], exportStatus: undefined };
     default:
       return state;
   }
 }
 
-/** Setup wizard as in docs/ui (setup-1 … setup-4); phase 1 copies structure into a .json template. */
+/** Setup wizard as in docs/ui (setup-1 … setup-4): structure into a .json template, with list items into a .zip. */
 const CopyJetSetup: React.FC<ICopyJetSetupProps> = ({ sp, siteTitle, createdBy }) => {
-  const [state, dispatch] = React.useReducer(reducer, { step: 0, selected: [], name: '', description: '', runId: 0 });
+  const [state, dispatch] = React.useReducer(reducer, { step: 0, selected: [], name: '', description: '', content: [], preserveAuthors: true, runId: 0 });
   const stopRef = React.useRef<(() => void) | undefined>(undefined);
 
   React.useEffect(() => {
@@ -99,7 +110,9 @@ const CopyJetSetup: React.FC<ICopyJetSetupProps> = ({ sp, siteTitle, createdBy }
   }, [sp, siteTitle]);
 
   const artifacts = state.discovery ? state.discovery.artifacts : [];
-  const refs = selectedRefs(artifacts, state.selected);
+  const structure = selectedRefs(artifacts, state.selected);
+  const refs = structure.concat(contentRefs(state.content, state.selected));
+  const contentLists = selectedArtifacts(artifacts, state.selected).filter((a) => state.content.indexOf(a.ref.key) >= 0);
   const steps = [strings.StepSelect, strings.StepOptions, strings.StepSummary, strings.StepExport];
   const subtitles = [strings.SubtitleSelect, strings.SubtitleOptions, strings.SubtitleSummary, strings.SubtitleExport];
   const go = (step: number): void => dispatch({ type: 'step', step });
@@ -129,6 +142,10 @@ const CopyJetSetup: React.FC<ICopyJetSetupProps> = ({ sp, siteTitle, createdBy }
         description={state.description}
         onName={(name) => dispatch({ type: 'name', name })}
         onDescription={(description) => dispatch({ type: 'description', description })}
+        content={state.content}
+        onContent={(key, on) => dispatch({ type: 'content', key, on })}
+        preserveAuthors={state.preserveAuthors}
+        onPreserveAuthors={(on) => dispatch({ type: 'preserveAuthors', on })}
       />
     );
     footerEnd = (
@@ -141,11 +158,12 @@ const CopyJetSetup: React.FC<ICopyJetSetupProps> = ({ sp, siteTitle, createdBy }
     body = (
       <SummaryStep
         sp={sp}
-        refs={refs}
+        refs={structure}
         discovered={artifacts}
         name={state.name}
         createdBy={createdBy}
         kindLabel={kindLabel}
+        content={{ lists: contentLists.length, items: contentLists.reduce((n, a) => n + (a.itemCount || 0), 0), personal: contentLists.length > 0 && state.preserveAuthors }}
         onAddMissing={(keys) => dispatch({ type: 'addMissing', keys })}
       />
     );
@@ -165,6 +183,7 @@ const CopyJetSetup: React.FC<ICopyJetSetupProps> = ({ sp, siteTitle, createdBy }
         name={state.name}
         description={state.description}
         createdBy={createdBy}
+        preserveAuthors={state.preserveAuthors}
         kindLabel={kindLabel}
         logLabels={LOG_LABELS}
         onStatus={(status, stop) => {

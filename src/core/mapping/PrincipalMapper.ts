@@ -26,31 +26,41 @@ export class PrincipalMapper {
   private readonly _sp: SPFI;
   private readonly _byKey: { [key: string]: IPrincipal } = {};
   private readonly _done: { [key: string]: IPrincipalMapping } = {};
+  private readonly _warned: Map<Logger, string[]> = new Map();
 
   constructor(sp: SPFI, principals: IPrincipal[]) {
     this._sp = sp;
     principals.forEach((p) => (this._byKey[p.key] = p));
   }
 
-  /** Maps the given keys (unknown keys map to nothing) and registers the logins in `tokens`. */
+  /**
+   * Maps the given keys (each looked up once per mapper; unknown keys map to nothing), registers the found
+   * logins in `tokens` and warns once per log about principals not found.
+   */
   public async map(keys: string[], tokens: TokenContext, log: Logger, signal?: AbortSignal): Promise<IPrincipalMapping[]> {
-    const todo = keys.filter((k, i) => keys.indexOf(k) === i && !this._done[k]);
+    const wanted = keys.filter((k, i) => keys.indexOf(k) === i);
+    const todo = wanted.filter((k) => !this._done[k]);
     const results = await limitConcurrency(todo.map((key) => () => this._map(key)), 4, signal);
     results.forEach((r, i) => {
       if (!r.ok && isAbortError(r.error)) throw r.error;
-      const mapping = r.ok ? r.value : { key: todo[i] };
-      this._done[mapping.key] = mapping;
+      this._done[todo[i]] = r.ok ? r.value : { key: todo[i] };
+    });
+    const warned = this._warned.get(log) || [];
+    this._warned.set(log, warned);
+    return wanted.map((key) => {
+      const mapping = this._done[key];
       if (mapping.login) {
-        tokens.set('principal', mapping.key, mapping.login);
-      } else {
-        const p = this._byKey[mapping.key];
-        log.warn(`User or group not found on the target site: ${p ? p.displayName || p.email || p.loginName : mapping.key}. Its values are left empty.`, {
+        tokens.set('principal', key, mapping.login);
+      } else if (warned.indexOf(key) < 0) {
+        warned.push(key);
+        const p = this._byKey[key];
+        log.warn(`User or group not found on the target site: ${p ? p.displayName || p.email || p.loginName : key}. Its values are left empty.`, {
           code: 'PRINCIPAL_NOT_FOUND',
-          detail: p ? { key: p.key, email: p.email } : { key: mapping.key }
+          detail: p ? { key: p.key, email: p.email } : { key }
         });
       }
+      return mapping;
     });
-    return keys.map((k) => this._done[k]).filter((m) => !!m);
   }
 
   private async _map(key: string): Promise<IPrincipalMapping> {

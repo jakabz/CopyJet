@@ -97,7 +97,7 @@ export class ItemExtractor implements IExtractor<IListItemsDef> {
             if (editor) system.editor = editor;
             if (typeof raw.Created === 'string') system.created = raw.Created;
             if (typeof raw.Modified === 'string') system.modified = raw.Modified;
-            if (Object.keys(system).length) item.system = system;
+            if (opts.preserveAuthors !== false && Object.keys(system).length) item.system = system;
             file.items.push(item);
           });
         if (page.length < ITEM_PAGE_SIZE) break;

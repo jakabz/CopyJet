@@ -3,7 +3,7 @@ import { Icon } from '@fluentui/react';
 import * as strings from 'CopyJetSetupWebPartStrings';
 import type { IDiscoveredArtifact } from '../../../core/model';
 import { ui } from '../../../shared/components/ui';
-import { categoryOf } from './selection';
+import { canCopyItems, categoryOf } from './selection';
 import styles from './CopyJetSetup.module.scss';
 
 export interface IOptionsStepProps {
@@ -13,6 +13,11 @@ export interface IOptionsStepProps {
   description: string;
   onName: (name: string) => void;
   onDescription: (description: string) => void;
+  /** List keys switched to "structure + content". */
+  content: string[];
+  onContent: (key: string, on: boolean) => void;
+  preserveAuthors: boolean;
+  onPreserveAuthors: (on: boolean) => void;
 }
 
 function typeLabel(a: IDiscoveredArtifact): string {
@@ -29,12 +34,14 @@ function typeLabel(a: IDiscoveredArtifact): string {
 const Phase2: React.FC = () => <span className={ui.muted}> {strings.Phase2}</span>;
 
 /**
- * Step 2 (docs/ui setup-2): per-item copy options with a side panel, global settings. In phase 1 only the
- * structure can be copied; the content, version and member options are shown switched off.
+ * Step 2 (docs/ui setup-2): per-item copy options with a side panel, global settings. Lists can carry their
+ * items; library files, versions and group members follow later in phase 2 and are shown switched off.
  */
-export const OptionsStep: React.FC<IOptionsStepProps> = ({ items, name, description, onName, onDescription }) => {
+export const OptionsStep: React.FC<IOptionsStepProps> = ({ items, name, description, onName, onDescription, content, onContent, preserveAuthors, onPreserveAuthors }) => {
   const [open, setOpen] = React.useState<string | undefined>(undefined);
   const current = items.filter((i) => i.ref.key === open)[0];
+  const withContent = (key: string): boolean => content.indexOf(key) >= 0;
+  const hasContent = items.some((i) => withContent(i.ref.key));
 
   return (
     <div className={ui.split}>
@@ -63,7 +70,7 @@ export const OptionsStep: React.FC<IOptionsStepProps> = ({ items, name, descript
                   >
                     <td className={ui.strong}>{i.title}</td>
                     <td className={ui.muted}>{typeLabel(i)}</td>
-                    <td>{group ? strings.CopyGroup : strings.CopyStructure}</td>
+                    <td>{group ? strings.CopyGroup : withContent(i.ref.key) ? strings.CopyStructureContent : strings.CopyStructure}</td>
                     <td className={ui.muted}>{group ? strings.MembersOff : categoryOf(i) === 'libraries' ? strings.Off : strings.Dash}</td>
                   </tr>
                 );
@@ -88,8 +95,8 @@ export const OptionsStep: React.FC<IOptionsStepProps> = ({ items, name, descript
           </div>
           <div className={styles.inlineSettings}>
             <span>
-              <input className={ui.check} type="checkbox" id="cj-authors" disabled /> <label htmlFor="cj-authors">{strings.PreserveAuthors}</label>
-              <Phase2 />
+              <input className={ui.check} type="checkbox" id="cj-authors" checked={preserveAuthors} disabled={!hasContent} onChange={(e) => onPreserveAuthors(e.target.checked)} />{' '}
+              <label htmlFor="cj-authors">{strings.PreserveAuthors}</label>
             </span>
             <span>
               <label htmlFor="cj-maxsize">{strings.MaxFileSize}</label>{' '}
@@ -100,12 +107,13 @@ export const OptionsStep: React.FC<IOptionsStepProps> = ({ items, name, descript
             </span>
             <span>
               <label htmlFor="cj-format">{strings.FormatLabel}</label>{' '}
-              <select id="cj-format" className={ui.select} value="json" onChange={() => undefined}>
+              <select id="cj-format" className={ui.select} value={hasContent ? 'zip' : 'json'} disabled aria-describedby="cj-format-note">
                 <option value="json">{strings.FormatJson}</option>
-                <option value="zip" disabled>
-                  {`${strings.FormatZip} ${strings.Phase2}`}
-                </option>
-              </select>
+                <option value="zip">{strings.FormatZip}</option>
+              </select>{' '}
+              <span id="cj-format-note" className={ui.muted}>
+                ({strings.FormatAuto})
+              </span>
             </span>
           </div>
         </div>
@@ -135,11 +143,21 @@ export const OptionsStep: React.FC<IOptionsStepProps> = ({ items, name, descript
                 <fieldset className={styles.fieldset}>
                   <legend className={ui.label}>{strings.CopyMode}</legend>
                   <span>
-                    <input type="radio" name="cj-mode" id="cj-m1" checked readOnly className={ui.check} /> <label htmlFor="cj-m1">{strings.CopyStructure}</label>
+                    <input type="radio" name="cj-mode" id="cj-m1" checked={!withContent(current.ref.key)} onChange={() => onContent(current.ref.key, false)} className={ui.check} />{' '}
+                    <label htmlFor="cj-m1">{strings.CopyStructure}</label>
                   </span>
                   <span>
-                    <input type="radio" name="cj-mode" id="cj-m2" disabled className={ui.check} /> <label htmlFor="cj-m2">{strings.CopyStructureContent}</label>
-                    <Phase2 />
+                    <input
+                      type="radio"
+                      name="cj-mode"
+                      id="cj-m2"
+                      checked={withContent(current.ref.key)}
+                      disabled={!canCopyItems(current)}
+                      onChange={() => onContent(current.ref.key, true)}
+                      className={ui.check}
+                    />{' '}
+                    <label htmlFor="cj-m2">{strings.CopyStructureContent}</label>
+                    {!canCopyItems(current) && <Phase2 />}
                   </span>
                 </fieldset>
                 <div className={ui.field}>

@@ -15,6 +15,8 @@ export interface ISummaryStepProps {
   name: string;
   createdBy: string;
   kindLabel: (kind: ArtifactKind) => string;
+  /** Lists copied with items and their item count (from the discovery); items are not read in the dry run. */
+  content: { lists: number; items: number; personal: boolean };
   onAddMissing: (keys: string[]) => void;
 }
 
@@ -25,9 +27,9 @@ interface IAnalysis {
 
 /**
  * Step 3 (docs/ui setup-3): a dry run of the extraction shows what the template will contain and which
- * dependencies are missing from the selection.
+ * dependencies are missing from the selection. It covers the structure only: items are read at export.
  */
-export const SummaryStep: React.FC<ISummaryStepProps> = ({ sp, refs, discovered, name, createdBy, kindLabel, onAddMissing }) => {
+export const SummaryStep: React.FC<ISummaryStepProps> = ({ sp, refs, discovered, name, createdBy, kindLabel, content, onAddMissing }) => {
   const [analysis, setAnalysis] = React.useState<IAnalysis | undefined>(undefined);
   const [error, setError] = React.useState<string | undefined>(undefined);
   const selectionKey = refs.map((r) => r.key).join('|');
@@ -75,6 +77,7 @@ export const SummaryStep: React.FC<ISummaryStepProps> = ({ sp, refs, discovered,
       <Stats
         items={[
           { label: strings.StatLists, value: t.lists.length },
+          ...(content.lists > 0 ? [{ label: strings.StatItems, value: content.items }] : []),
           { label: strings.StatColumns, value: t.siteFields.length + listFields },
           { label: strings.StatViews, value: views },
           { label: strings.StatGroups, value: t.groups.length }
@@ -94,6 +97,13 @@ export const SummaryStep: React.FC<ISummaryStepProps> = ({ sp, refs, discovered,
             <td>{format(strings.StructureText, t.siteFields.length, t.contentTypes.length, t.lists.length, listFields, views)}</td>
             <td className={ui.muted}>{strings.StructureNote}</td>
           </tr>
+          {content.lists > 0 && (
+            <tr>
+              <td className={ui.strong}>{strings.AreaContent}</td>
+              <td>{format(strings.ContentText, content.lists, content.items)}</td>
+              <td className={ui.muted}>{strings.ContentNote}</td>
+            </tr>
+          )}
           {t.groups.length > 0 && (
             <tr>
               <td className={ui.strong}>{strings.AreaGroups}</td>
@@ -103,7 +113,7 @@ export const SummaryStep: React.FC<ISummaryStepProps> = ({ sp, refs, discovered,
           )}
         </tbody>
       </table>
-      <Message kind="note">{strings.PersonalNote}</Message>
+      <Message kind="note">{content.personal ? strings.PersonalNoteContent : strings.PersonalNote}</Message>
     </>
   );
 };

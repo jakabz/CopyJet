@@ -140,7 +140,7 @@ export const PreviewStep: React.FC<IPreviewStepProps> = ({ sp, template, targetS
                     ) : r ? (
                       <span title={(r.changes || []).join(', ')}>
                         <Tag kind={TAG[r.status]}>{statusLabel(r)}</Tag>
-                        {r.status === 'different' && r.changes && <span className={`${ui.muted} ${styles.changes}`}> {r.changes.join(', ')}</span>}
+                        {r.status === 'different' && r.changes && <span className={`${ui.muted} ${styles.changes}`}> {r.changes.map(reasonText).join(', ')}</span>}
                       </span>
                     ) : null}
                   </td>

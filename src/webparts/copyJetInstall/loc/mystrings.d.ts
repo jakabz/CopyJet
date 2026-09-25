@@ -20,7 +20,6 @@ declare interface ICopyJetInstallWebPartStrings {
   LoadFromUrl: string;
   PickFromLibrary: string;
   Reading: string;
-  ZipLater: string;
   InvalidTemplate: string;
   ParseError: string;
   VersionError: string;
@@ -41,7 +40,6 @@ declare interface ICopyJetInstallWebPartStrings {
   Users: string;
   ManagedMetadata: string;
   NothingToMap: string;
-  MappingLater: string;
   ColName: string;
   ColSourceUser: string;
   ColTargetUser: string;
@@ -116,6 +114,20 @@ declare interface ICopyJetInstallWebPartStrings {
   KindLibrary: string;
   KindListField: string;
   KindView: string;
+  KindItems: string;
+  KindItemLookups: string;
+  PhaseItems: string;
+  PhaseItemLookups: string;
+  ContentMissing: string;
+  ContentItems: string;
+  MappingAuto: string;
+  MappingChecking: string;
+  MappingNotFoundNote: string;
+  MapSameLogin: string;
+  MapSameEmail: string;
+  MapNotFound: string;
+  TermsLater: string;
+  ReasontargetHasItems: string;
   LogTitle: string;
   LogAll: string;
   LogInfo: string;

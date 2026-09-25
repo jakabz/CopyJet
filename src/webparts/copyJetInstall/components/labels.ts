@@ -1,4 +1,5 @@
 import * as strings from 'CopyJetInstallWebPartStrings';
+import type { IListItemsDef } from '../../../core/items';
 import type { IListFieldDef, IListViewDef } from '../../../core/lists';
 import type { ArtifactKind, IContentType, ICopyJetTemplate, IField, IGroup, IList } from '../../../core/model';
 import type { IPlanStep } from '../../../core/planner';
@@ -13,7 +14,9 @@ export function kindLabel(kind: ArtifactKind, def?: unknown): string {
     contentType: strings.KindContentType,
     list: strings.KindList,
     listField: strings.KindListField,
-    view: strings.KindView
+    view: strings.KindView,
+    items: strings.KindItems,
+    itemLookups: strings.KindItemLookups
   };
   if (kind === 'list' && def && (def as IList).template === DOCUMENT_LIBRARY) return strings.KindLibrary;
   return labels[kind] || kind;
@@ -39,6 +42,9 @@ export function stepTitle(step: IPlanStep, template: ICopyJetTemplate, targetSit
       const d = step.def as IListViewDef;
       return `${listTitle(d.listKey)} / ${d.view.title}`;
     }
+    case 'items':
+    case 'itemLookups':
+      return listTitle((step.def as IListItemsDef).listKey);
     default:
       return step.ref.key;
   }

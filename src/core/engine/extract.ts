@@ -4,7 +4,7 @@ import { throwIfAborted } from '../errors';
 import { limitConcurrency } from '../http/concurrency';
 import { loadSourceSite } from '../lists/sourceTokens';
 import type { Logger } from '../logger/Logger';
-import type { ArtifactKind, IArtifactRef, ICopyJetTemplate, IDiscoveredArtifact, ITemplateWriter } from '../model';
+import type { ArtifactKind, IArtifactRef, ICopyJetTemplate, IDiscoveredArtifact, IExtractOptions, ITemplateWriter } from '../model';
 import { JsonTemplateWriter, ZipTemplateWriter, createEmptyTemplate } from '../packager';
 import { templateNodes } from '../planner/planner';
 import { createExtractors } from './registry';
@@ -42,6 +42,8 @@ export interface IExtractRequest {
   description?: string;
   /** Login or e-mail of the user making the template (meta.createdBy). */
   createdBy: string;
+  /** Items keep their author, editor and dates (default true). */
+  preserveAuthors?: boolean;
   log: Logger;
   signal?: AbortSignal;
   /** Called before each extractor runs (with its kind) and once at the end (without). */
@@ -99,7 +101,16 @@ export async function extractTemplate(sp: SPFI, req: IExtractRequest): Promise<I
     if (req.onProgress) req.onProgress(i, extractors.length, e.kind);
     const refs = req.refs.filter((r) => r.kind === e.kind);
     if (refs.length === 0) continue;
-    await e.extract(sp, refs, { includeContent: false, includeVersions: false, includeMembers: false, tokens: site.tokens, log: req.log, signal: req.signal }, writer);
+    const opts: IExtractOptions = {
+      includeContent: format === 'zip',
+      includeVersions: false,
+      includeMembers: false,
+      preserveAuthors: req.preserveAuthors !== false,
+      tokens: site.tokens,
+      log: req.log,
+      signal: req.signal
+    };
+    await e.extract(sp, refs, opts, writer);
     req.log.info(`Extracted: ${refs.length} × ${e.kind}.`, { step: e.kind });
   }
   if (req.onProgress) req.onProgress(extractors.length, extractors.length);
