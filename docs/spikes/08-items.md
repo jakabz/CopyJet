@@ -564,9 +564,9 @@ Előkészítés rendben: mindkét oszlop létrejött, a tartalomtípusok és a m
 - URL: `<url, a vesszők duplázva>, <leírás>`. A leírásban a vessző szabadon maradhat.
 - Tartalomtípus: `ContentTypeId`-t küldünk. A cél lista tartalomtípusát a sablonbeli szülő site-tartalomtípus ID alapján keressük meg (a lista-tartalomtípus ID = szülő + `00` + 32 hexa), mert a név nyelvfüggő.
 - Mappák: a hiányzó mappákat (a szülőt előbb) az elemek előtt létre kell hozni, különben a kérés HTTP 500-zal elbukik.
-- A Létrehozta/Módosította **másik** felhasználóra nincs igazolva. Ezt az első valódi telepítés napló ellenőrzi (figyelmeztetés, ha nem állítható).
+- A Létrehozta/Módosította **másik** felhasználóra itt még nem volt igazolva. A G–I kísérlet igazolta (lásd lent).
 
-Állapot: **lezárva** (a más szerzős eset a telepítési teszten ellenőrizendő).
+Állapot: **lezárva**.
 
 ## F. vizsgálat – első valódi tartalomtelepítés (2026-09-25, 1.3.1.0)
 
@@ -647,3 +647,311 @@ Csak olvas. Futtasd a Forrás és a Cél site-on is:
 - **Megerősítés a sablonból** (`items/Teszt_lista.json`): a 7. elem (`"folder": "Teszt mappa"`) az egyetlen mappában lévő elem, és csak ez bukott el. A többi értéke egyszerű: szöveg, választás, szám, lookup, személy. A Létrehozta/Módosította itt egy másik felhasználó (`{principal:AdeleV}`), ez az 1.3.2.0 tesztjén derül ki.
 
 Állapot: **javítva az 1.3.2.0-ban**, valódi telepítéssel ellenőrizendő.
+
+## G. kísérlet – Cél site (**ír**): Létrehozta / Módosította egy másik felhasználóra
+
+**Háttér (1.3.2.0 telepítés, 2026-09-25):** az „Adele teszt” elem Létrehozta mezője a telepítő lett, nem Adele. `PRINCIPAL_NOT_FOUND` nem jelentkezett, vagyis a CopyJet megtalálta Adelét, és a `Author` értéket az `AddValidateUpdateItemUsingPath` hívásban el is küldte. A SharePoint ezt hiba nélkül figyelmen kívül hagyta. A spike C ezt nem mutathatta ki, mert ott a saját felhasználó volt a szerző.
+
+**Kérdés:** melyik hívás állítja be ténylegesen a Létrehozta, Módosította, Létrehozva és Módosítva mezőt egy *másik* felhasználóra?
+- **G1/G2:** minden a létrehozáskor megy (ahogy az 1.3.x teszi), `bNewDocumentUpdate` igaz és hamis értékkel. Kontrollként a `CJUser` személymező is Adele.
+- **G3/G4:** előbb egyszerű létrehozás, utána `ValidateUpdateListItem` a négy mezővel, `bNewDocumentUpdate` igaz és hamis értékkel.
+
+Csak a Cél **teszt** site-on futtasd. A `CopyJetSpike08` listát használja, és ha már nincs meg, létrehozza a `CJUser` oszloppal együtt. A site egy másik felhasználóját használja (`other`), és csak álnevet ír ki.
+
+```js
+(async () => {
+  const guess = location.origin + ((location.pathname.match(/^\/(?:sites|teams)\/[^\/]+/i) || [''])[0]);
+  const H = { Accept: 'application/json;odata=nometadata' };
+  const webInfo = await (await fetch(guess + '/_api/web?$select=Url,ServerRelativeUrl', { headers: H })).json();
+  const web = webInfo.Url, rel = webInfo.ServerRelativeUrl.replace(/\/$/, '');
+  const digest = (await (await fetch(web + '/_api/contextinfo', { method: 'POST', headers: H })).json()).FormDigestValue;
+  const W = { ...H, 'Content-Type': 'application/json;odata=nometadata', 'X-RequestDigest': digest };
+  const enc = (s) => encodeURIComponent(s.replace(/'/g, "''"));
+  const listUrl = `${rel}/Lists/CopyJetSpike08`;
+  const LIST = `${web}/_api/web/getList('${enc(listUrl)}')`;
+  // The test list may have been deleted since the earlier spikes: create it (with the person column) when missing.
+  const out0 = {};
+  if ((await fetch(`${LIST}?$select=Id`, { headers: H })).status === 404) {
+    const r = await fetch(`${web}/_api/web/lists`, { method: 'POST', headers: W, body: JSON.stringify({ Title: 'CopyJetSpike08', BaseTemplate: 100 }) });
+    out0.listCreated = r.status;
+  }
+  if (!(await fetch(`${LIST}/fields/getbyinternalnameortitle('CJUser')?$select=Id`, { headers: H })).ok) {
+    const r = await fetch(`${LIST}/fields/createfieldasxml`, { method: 'POST', headers: W, body: JSON.stringify({ parameters: { SchemaXml: '<Field Name="CJUser" DisplayName="CJ személy" Type="User" UserSelectionMode="PeopleOnly" />', Options: 12 } }) });
+    out0.fieldCreated = r.status;
+  }
+  const me = await (await fetch(`${web}/_api/web/currentuser?$select=Id,LoginName`, { headers: H })).json();
+  const users = ((await (await fetch(`${web}/_api/web/siteusers?$select=Id,LoginName,PrincipalType&$filter=PrincipalType eq 1`, { headers: H })).json()).value || [])
+    .filter((u) => /^i:0#\.f\|membership\|/.test(u.LoginName) && !/urn%3aspo%3a|app@sharepoint/i.test(u.LoginName) && u.Id !== me.Id);
+  const other = users[0];
+  if (!other) { console.log('No other user on the site: open the site once as another user, then run again.'); return; }
+  const alias = (id) => (id === me.Id ? 'me' : id === other.Id ? 'other' : id);
+  const person = JSON.stringify([{ Key: other.LoginName }]);
+  // The web's regional format for 2026-01-15T10:00:00Z / 2026-01-16T11:30:00Z (local time from SharePoint).
+  const rs = await (await fetch(`${web}/_api/web/RegionalSettings?$select=LocaleId,Time24`, { headers: H })).json();
+  const local = async (iso) => (await (await fetch(`${web}/_api/web/RegionalSettings/TimeZone/utcToLocalTime(@d)?@d='${iso}'`, { headers: H })).json()).value;
+  const fmt = (l) => {
+    const [d, t] = l.split('T');
+    const [y, mo, da] = d.split('-').map(Number);
+    const [h, mi] = t.split(':').map(Number);
+    const tag = rs.LocaleId === 1038 ? 'hu-HU' : 'en-US';
+    return new Intl.DateTimeFormat(tag, { year: 'numeric', month: 'numeric', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: !rs.Time24, timeZone: 'UTC' })
+      .format(new Date(Date.UTC(y, mo - 1, da, h, mi))).replace(/[  ]/g, ' ').replace(/,\s*/, ' ');
+  };
+  const created = fmt(await local('2026-01-15T10:00:00Z')), modified = fmt(await local('2026-01-16T11:30:00Z'));
+  const system = [
+    { FieldName: 'Author', FieldValue: person },
+    { FieldName: 'Editor', FieldValue: person },
+    { FieldName: 'Created', FieldValue: created },
+    { FieldName: 'Modified', FieldValue: modified }
+  ];
+  const errs = (body) => (body.value || []).filter((v) => v.HasException).map((v) => `${v.FieldName}: ${v.ErrorMessage}`);
+  const add = async (title, values, newDoc) => {
+    const r = await fetch(`${LIST}/AddValidateUpdateItemUsingPath`, { method: 'POST', headers: W, body: JSON.stringify({
+      listItemCreateInfo: { FolderPath: { DecodedUrl: listUrl }, UnderlyingObjectType: 0 },
+      formValues: [{ FieldName: 'Title', FieldValue: title }].concat(values), bNewDocumentUpdate: newDoc }) });
+    const body = r.ok ? await r.json() : { value: [{ FieldName: 'HTTP', HasException: true, ErrorMessage: String(r.status) }] };
+    return { id: Number(((body.value || []).filter((v) => v.FieldName === 'Id')[0] || {}).FieldValue), errors: errs(body) };
+  };
+  const update = async (id, values, newDoc) => {
+    const r = await fetch(`${LIST}/items(${id})/ValidateUpdateListItem`, { method: 'POST', headers: W, body: JSON.stringify({ formValues: values, bNewDocumentUpdate: newDoc }) });
+    const body = r.ok ? await r.json() : { value: [{ FieldName: 'HTTP', HasException: true, ErrorMessage: String(r.status) }] };
+    return errs(body);
+  };
+  const read = async (id) => {
+    const i = await (await fetch(`${LIST}/items(${id})?$select=AuthorId,EditorId,Created,Modified,CJUserId`, { headers: H })).json();
+    return { AuthorId: alias(i.AuthorId), EditorId: alias(i.EditorId), Created: i.Created, Modified: i.Modified, CJUserId: alias(i.CJUserId) };
+  };
+  const out = { setup: out0, sent: { created, modified }, tests: {} };
+  // G1/G2: everything at creation (what CopyJet 1.3.x does), with and without bNewDocumentUpdate.
+  for (const [key, newDoc] of [['G1_add_newDocTrue', true], ['G2_add_newDocFalse', false]]) {
+    const a = await add(key, system.concat([{ FieldName: 'CJUser', FieldValue: person }]), newDoc);
+    out.tests[key] = { errors: a.errors, back: a.id ? await read(a.id) : null };
+  }
+  // G3/G4: create plainly, then set the system values with ValidateUpdateListItem.
+  for (const [key, newDoc] of [['G3_update_newDocTrue', true], ['G4_update_newDocFalse', false]]) {
+    const a = await add(key, [], false);
+    const errors = a.errors.concat(a.id ? await update(a.id, system, newDoc) : []);
+    out.tests[key] = { errors, back: a.id ? await read(a.id) : null };
+  }
+  out.expected = { AuthorId: 'other', EditorId: 'other', Created: '2026-01-15T10:00:00Z', Modified: '2026-01-16T11:30:00Z' };
+  const json = JSON.stringify(out, null, 2);
+  console.log(json);
+  try { await navigator.clipboard.writeText(json); console.log('Copied to clipboard.'); } catch { console.log('Copy the JSON above manually.'); }
+})();
+```
+
+**Mit várunk:** legalább egy változatnál `AuthorId: "other"`, `EditorId: "other"` és a kért dátumok.
+
+### G – eredmény (2026-09-25, Cél site, en-US)
+
+A `CopyJetSpike08` lista időközben törlődött, ezért az első futás 404-et adott. A kód azóta maga hozza létre a listát és a `CJUser` oszlopot.
+
+**Mind a négy változat ✅:** `AuthorId` és `EditorId` = `other`, a `Created` és a `Modified` pontosan a kért érték. A létrehozáskori beállítás tehát működik (G1/G2, a `bNewDocumentUpdate` értékétől függetlenül), és az utólagos `ValidateUpdateListItem` is (G3/G4).
+
+→ Az 1.3.2.0 telepítésben tapasztalt eltérést a CopyJet hívásának valamelyik különbsége okozza: `ContentTypeId` ugyanabban a hívásban, mappa vagy `$batch`. Ezt a H kísérlet választja szét.
+
+## H. kísérlet – Cél site (**ír**): mi különbözik a CopyJet hívásában?
+
+Mindegyik változat a G1 kérését küldi (Létrehozta, Módosította, Létrehozva, Módosítva és `CJUser` = `other`), egy-egy eltéréssel:
+- **H1:** `ContentTypeId`-vel;
+- **H2:** új listamappába;
+- **H3:** `$batch` changesetben, ahogy a PnPjs küldi;
+- **H4:** mindhárom együtt, pontosan úgy, ahogy a CopyJet.
+
+Önálló: a listát és az oszlopot létrehozza, ha hiányzik, a mappát pedig mindig újonnan, egyedi névvel.
+
+```js
+(async () => {
+  const guess = location.origin + ((location.pathname.match(/^\/(?:sites|teams)\/[^\/]+/i) || [''])[0]);
+  const H = { Accept: 'application/json;odata=nometadata' };
+  const webInfo = await (await fetch(guess + '/_api/web?$select=Url,ServerRelativeUrl', { headers: H })).json();
+  const web = webInfo.Url, rel = webInfo.ServerRelativeUrl.replace(/\/$/, '');
+  const digest = (await (await fetch(web + '/_api/contextinfo', { method: 'POST', headers: H })).json()).FormDigestValue;
+  const W = { ...H, 'Content-Type': 'application/json;odata=nometadata', 'X-RequestDigest': digest };
+  const enc = (s) => encodeURIComponent(s.replace(/'/g, "''"));
+  const listUrl = `${rel}/Lists/CopyJetSpike08`;
+  const LIST = `${web}/_api/web/getList('${enc(listUrl)}')`;
+  const setup = {};
+  // Self-contained: the test list and its person column are created when missing.
+  if ((await fetch(`${LIST}?$select=Id`, { headers: H })).status === 404) {
+    setup.listCreated = (await fetch(`${web}/_api/web/lists`, { method: 'POST', headers: W, body: JSON.stringify({ Title: 'CopyJetSpike08', BaseTemplate: 100 }) })).status;
+  }
+  if (!(await fetch(`${LIST}/fields/getbyinternalnameortitle('CJUser')?$select=Id`, { headers: H })).ok) {
+    setup.fieldCreated = (await fetch(`${LIST}/fields/createfieldasxml`, { method: 'POST', headers: W, body: JSON.stringify({ parameters: { SchemaXml: '<Field Name="CJUser" DisplayName="CJ személy" Type="User" UserSelectionMode="PeopleOnly" />', Options: 12 } }) })).status;
+  }
+  const me = await (await fetch(`${web}/_api/web/currentuser?$select=Id,LoginName`, { headers: H })).json();
+  const users = ((await (await fetch(`${web}/_api/web/siteusers?$select=Id,LoginName,PrincipalType&$filter=PrincipalType eq 1`, { headers: H })).json()).value || [])
+    .filter((u) => /^i:0#\.f\|membership\|/.test(u.LoginName) && !/urn%3aspo%3a|app@sharepoint/i.test(u.LoginName) && u.Id !== me.Id);
+  const other = users[0];
+  if (!other) { console.log('No other user on the site.'); return; }
+  const alias = (id) => (id === me.Id ? 'me' : id === other.Id ? 'other' : id);
+  const person = JSON.stringify([{ Key: other.LoginName }]);
+  // The list's Item content type (the ID CopyJet sends as ContentTypeId).
+  const cts = ((await (await fetch(`${LIST}/contenttypes?$select=StringId,Parent/StringId&$expand=Parent`, { headers: H })).json()).value || []);
+  const itemCt = (cts.filter((c) => c.Parent && c.Parent.StringId === '0x01')[0] || {}).StringId;
+  // A fresh list folder (as CopyJet 1.3.2 creates it).
+  const folderName = `H mappa ${Date.now()}`;
+  const fr = await fetch(`${LIST}/AddValidateUpdateItemUsingPath`, { method: 'POST', headers: W, body: JSON.stringify({
+    listItemCreateInfo: { FolderPath: { DecodedUrl: listUrl }, LeafName: { DecodedUrl: folderName }, UnderlyingObjectType: 1 },
+    formValues: [{ FieldName: 'Title', FieldValue: folderName }], bNewDocumentUpdate: false }) });
+  setup.folder = fr.status;
+  const folderUrl = `${listUrl}/${folderName}`;
+  // Dates in the web's format (local time from SharePoint).
+  const rs = await (await fetch(`${web}/_api/web/RegionalSettings?$select=LocaleId,Time24`, { headers: H })).json();
+  const local = async (iso) => (await (await fetch(`${web}/_api/web/RegionalSettings/TimeZone/utcToLocalTime(@d)?@d='${iso}'`, { headers: H })).json()).value;
+  const fmt = (l) => {
+    const [d, t] = l.split('T');
+    const [y, mo, da] = d.split('-').map(Number);
+    const [h, mi] = t.split(':').map(Number);
+    return new Intl.DateTimeFormat(rs.LocaleId === 1038 ? 'hu-HU' : 'en-US', { year: 'numeric', month: 'numeric', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: !rs.Time24, timeZone: 'UTC' })
+      .format(new Date(Date.UTC(y, mo - 1, da, h, mi))).replace(/[  ]/g, ' ').replace(/,\s*/, ' ');
+  };
+  const created = fmt(await local('2026-01-15T10:00:00Z')), modified = fmt(await local('2026-01-16T11:30:00Z'));
+  // The order CopyJet sends: values, ContentTypeId, then Author, Editor, Created, Modified.
+  const values = (title, withCt) => [{ FieldName: 'Title', FieldValue: title }, { FieldName: 'CJUser', FieldValue: person }]
+    .concat(withCt && itemCt ? [{ FieldName: 'ContentTypeId', FieldValue: itemCt }] : [])
+    .concat([{ FieldName: 'Author', FieldValue: person }, { FieldName: 'Editor', FieldValue: person }, { FieldName: 'Created', FieldValue: created }, { FieldName: 'Modified', FieldValue: modified }]);
+  const body = (title, withCt, folder) => JSON.stringify({ listItemCreateInfo: { FolderPath: { DecodedUrl: folder || listUrl }, UnderlyingObjectType: 0 }, formValues: values(title, withCt), bNewDocumentUpdate: true });
+  // The JSON part of a plain or $batch response (the batch wraps it in multipart text).
+  const parsed = (text) => { try { return JSON.parse(text.slice(text.indexOf('{'), text.lastIndexOf('}') + 1)); } catch { return {}; } };
+  const idOf = (text) => Number(((parsed(text).value || []).filter((v) => v.FieldName === 'Id')[0] || {}).FieldValue) || 0;
+  const errorsOf = (text) => (parsed(text).value || []).filter((v) => v.HasException).map((v) => `${v.FieldName}: ${v.ErrorMessage}`);
+  const single = async (title, withCt, folder) => {
+    const r = await fetch(`${LIST}/AddValidateUpdateItemUsingPath`, { method: 'POST', headers: W, body: body(title, withCt, folder) });
+    const text = await r.text();
+    return { status: r.status, id: idOf(text), errors: r.ok ? errorsOf(text) : [text.slice(0, 200)] };
+  };
+  // The same request inside a $batch changeset, as PnPjs sends it.
+  const batched = async (title, withCt, folder) => {
+    const b = `batch_${Date.now()}`, c = `changeset_${Date.now()}`;
+    const payload = [`--${b}`, `Content-Type: multipart/mixed; boundary="${c}"`, '', `--${c}`, 'Content-Type: application/http', 'Content-Transfer-Encoding: binary', '',
+      `POST ${LIST}/AddValidateUpdateItemUsingPath HTTP/1.1`, 'Accept: application/json;odata=nometadata', 'Content-Type: application/json;odata=nometadata', '',
+      body(title, withCt, folder), '', `--${c}--`, '', `--${b}--`, ''].join('\r\n');
+    const r = await fetch(`${web}/_api/$batch`, { method: 'POST', headers: { 'X-RequestDigest': digest, 'Content-Type': `multipart/mixed; boundary="${b}"` }, body: payload });
+    const text = await r.text();
+    return { status: r.status, id: idOf(text), errors: errorsOf(text), inner: (/HTTP\/1\.1 (\d{3})/.exec(text) || [])[1] };
+  };
+  const read = async (id) => {
+    const i = await (await fetch(`${LIST}/items(${id})?$select=AuthorId,EditorId,Created,Modified,CJUserId,FileDirRef`, { headers: H })).json();
+    return { AuthorId: alias(i.AuthorId), EditorId: alias(i.EditorId), Created: i.Created, Modified: i.Modified, CJUserId: alias(i.CJUserId), folder: (i.FileDirRef || '').slice(listUrl.length) || '/' };
+  };
+  const out = { setup, itemCt: itemCt ? itemCt.slice(0, 12) + '…' : null, tests: {} };
+  const cases = [
+    ['H1_contentType', () => single('H1', true)],
+    ['H2_folder', () => single('H2', false, folderUrl)],
+    ['H3_batch', () => batched('H3', false)],
+    ['H4_all_like_CopyJet', () => batched('H4', true, folderUrl)]
+  ];
+  for (const [key, run] of cases) {
+    const r = await run();
+    out.tests[key] = { status: r.status, inner: r.inner, errors: r.errors, back: r.id ? await read(r.id) : null };
+  }
+  out.expected = { AuthorId: 'other', EditorId: 'other', Created: '2026-01-15T10:00:00Z', Modified: '2026-01-16T11:30:00Z', CJUserId: 'other' };
+  const json = JSON.stringify(out, null, 2);
+  console.log(json);
+  try { await navigator.clipboard.writeText(json); console.log('Copied to clipboard.'); } catch { console.log('Copy the JSON above manually.'); }
+})();
+```
+
+**Mit várunk:** annál a változatnál, amelyik a hibát okozza, az `AuthorId` értéke `me` lesz `other` helyett.
+
+**Kiegészítés az 1.3.2.0 telepítéséről:** az „Adele teszt” elemen a „Valaki” oszlop Adele, a Létrehozta viszont a telepítő. A felhasználó-leképezés tehát jó (ugyanaz a login megy mindkét mezőbe), a hiba csak a rendszermezőt érinti.
+
+### H – eredmény (2026-09-25, Cél site)
+
+**Mind a négy változat ✅**, a CopyJet pontos másolata (H4: `ContentTypeId`, listamappa, `$batch`) is: `AuthorId` és `EditorId` = `other`, a dátumok pontosak. A hívás alakja tehát nem oka a hibának.
+
+## I. kísérlet – Cél site: verziókezelés és a dátumok sorrendje
+
+Két különbség maradt a spike és a valódi telepítés között:
+- A valódi „Teszt lista” **verziózott** (a Forrásról átvéve), a spike listája nem.
+- Az „Adele teszt” elemnél a **Módosítva egy másodperccel korábbi**, mint a Létrehozva.
+
+Lépések:
+- **I0 (csak olvas):** a telepített „Adele teszt” elem, a lista beállításai és a **verzióelőzmény**.
+- **I1:** a G1 kérés a verziózott `CopyJetSpike08v` listán. Ha nincs meg, létrehozza.
+- **I2:** a G1 kérés az „Adele teszt” dátumaival, verziózás nélkül.
+- **I3:** mindkét eltérés együtt.
+
+```js
+(async () => {
+  const guess = location.origin + ((location.pathname.match(/^\/(?:sites|teams)\/[^\/]+/i) || [''])[0]);
+  const H = { Accept: 'application/json;odata=nometadata' };
+  const webInfo = await (await fetch(guess + '/_api/web?$select=Url,ServerRelativeUrl', { headers: H })).json();
+  const web = webInfo.Url, rel = webInfo.ServerRelativeUrl.replace(/\/$/, '');
+  const digest = (await (await fetch(web + '/_api/contextinfo', { method: 'POST', headers: H })).json()).FormDigestValue;
+  const W = { ...H, 'Content-Type': 'application/json;odata=nometadata', 'X-RequestDigest': digest };
+  const enc = (s) => encodeURIComponent(s.replace(/'/g, "''"));
+  const listApi = (url) => `${web}/_api/web/getList('${enc(url)}')`;
+  const me = await (await fetch(`${web}/_api/web/currentuser?$select=Id,LoginName`, { headers: H })).json();
+  const users = ((await (await fetch(`${web}/_api/web/siteusers?$select=Id,LoginName,PrincipalType&$filter=PrincipalType eq 1`, { headers: H })).json()).value || [])
+    .filter((u) => /^i:0#\.f\|membership\|/.test(u.LoginName) && !/urn%3aspo%3a|app@sharepoint/i.test(u.LoginName) && u.Id !== me.Id);
+  const other = users[0];
+  if (!other) { console.log('No other user on the site.'); return; }
+  const alias = (id) => (id === me.Id ? 'me' : id === other.Id ? 'other' : id);
+  const out = { real: null, tests: {} };
+
+  // I0 (read only): the installed "Adele teszt" item, its list settings and version history.
+  const TL = listApi(`${rel}/Lists/Teszt lista`);
+  const tl = await fetch(`${TL}?$select=EnableVersioning,EnableMinorVersions,EnableModeration,ForceCheckout`, { headers: H });
+  if (tl.ok) {
+    const settings = await tl.json();
+    const found = ((await (await fetch(`${TL}/items?$select=Id,AuthorId,EditorId,Created,Modified,ValakiId,OData__UIVersionString&$filter=Title eq 'Adele teszt'`, { headers: H })).json()).value || [])[0];
+    let versions = null;
+    if (found) {
+      const v = await fetch(`${TL}/items(${found.Id})/versions?$select=VersionLabel,Created,IsCurrentVersion,CreatedBy/Email&$expand=CreatedBy`, { headers: H });
+      versions = v.ok ? ((await v.json()).value || []).map((x) => ({ label: x.VersionLabel, created: x.Created, by: x.CreatedBy && x.CreatedBy.Email ? (x.CreatedBy.Email.toLowerCase() === (other.LoginName.split('|').pop() || '').toLowerCase() ? 'other' : 'someone else') : '?' })) : `HTTP ${v.status}`;
+    }
+    out.real = { settings, item: found ? { AuthorId: alias(found.AuthorId), EditorId: alias(found.EditorId), Created: found.Created, Modified: found.Modified, ValakiId: alias(found.ValakiId), version: found.OData__UIVersionString } : 'not found', versions };
+  }
+
+  // Test lists: CopyJetSpike08 (no versioning) and CopyJetSpike08v (versioning on, like Teszt lista). Created when missing.
+  const ensureList = async (title, versioning) => {
+    const L = listApi(`${rel}/Lists/${title}`);
+    if ((await fetch(`${L}?$select=Id`, { headers: H })).status === 404) {
+      await fetch(`${web}/_api/web/lists`, { method: 'POST', headers: W, body: JSON.stringify({ Title: title, BaseTemplate: 100, EnableVersioning: versioning }) });
+    }
+    if (versioning) await fetch(L, { method: 'POST', headers: { ...W, 'X-HTTP-Method': 'MERGE', 'IF-MATCH': '*' }, body: JSON.stringify({ EnableVersioning: true, MajorVersionLimit: 50 }) });
+    return L;
+  };
+  const plain = await ensureList('CopyJetSpike08', false);
+  const versioned = await ensureList('CopyJetSpike08v', true);
+
+  const rs = await (await fetch(`${web}/_api/web/RegionalSettings?$select=LocaleId,Time24`, { headers: H })).json();
+  const local = async (iso) => (await (await fetch(`${web}/_api/web/RegionalSettings/TimeZone/utcToLocalTime(@d)?@d='${iso}'`, { headers: H })).json()).value;
+  const fmt = (l) => {
+    const [d, t] = l.split('T');
+    const [y, mo, da] = d.split('-').map(Number);
+    const [h, mi] = t.split(':').map(Number);
+    return new Intl.DateTimeFormat(rs.LocaleId === 1038 ? 'hu-HU' : 'en-US', { year: 'numeric', month: 'numeric', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: !rs.Time24, timeZone: 'UTC' })
+      .format(new Date(Date.UTC(y, mo - 1, da, h, mi))).replace(/[  ]/g, ' ').replace(/,\s*/, ' ');
+  };
+  const person = JSON.stringify([{ Key: other.LoginName }]);
+  const run = async (L, title, createdIso, modifiedIso) => {
+    const listUrl = `${rel}/Lists/${L === plain ? 'CopyJetSpike08' : 'CopyJetSpike08v'}`;
+    const formValues = [{ FieldName: 'Title', FieldValue: title }, { FieldName: 'Author', FieldValue: person }, { FieldName: 'Editor', FieldValue: person },
+      { FieldName: 'Created', FieldValue: fmt(await local(createdIso)) }, { FieldName: 'Modified', FieldValue: fmt(await local(modifiedIso)) }];
+    const r = await fetch(`${L}/AddValidateUpdateItemUsingPath`, { method: 'POST', headers: W, body: JSON.stringify({ listItemCreateInfo: { FolderPath: { DecodedUrl: listUrl }, UnderlyingObjectType: 0 }, formValues, bNewDocumentUpdate: true }) });
+    const body = r.ok ? await r.json() : { value: [] };
+    const id = Number(((body.value || []).filter((v) => v.FieldName === 'Id')[0] || {}).FieldValue);
+    const errors = (body.value || []).filter((v) => v.HasException).map((v) => `${v.FieldName}: ${v.ErrorMessage}`);
+    if (!id) return { status: r.status, errors };
+    const i = await (await fetch(`${L}/items(${id})?$select=AuthorId,EditorId,Created,Modified,OData__UIVersionString`, { headers: H })).json();
+    return { status: r.status, errors, back: { AuthorId: alias(i.AuthorId), EditorId: alias(i.EditorId), Created: i.Created, Modified: i.Modified, version: i.OData__UIVersionString } };
+  };
+  out.tests.I1_versioned = await run(versioned, 'I1', '2026-01-15T10:00:00Z', '2026-01-16T11:30:00Z');
+  out.tests.I2_modified_before_created = await run(plain, 'I2', '2026-09-25T07:54:16Z', '2026-09-25T07:54:15Z');
+  out.tests.I3_versioned_and_dates_like_Adele = await run(versioned, 'I3', '2026-09-25T07:54:16Z', '2026-09-25T07:54:15Z');
+  const json = JSON.stringify(out, null, 2);
+  console.log(json);
+  try { await navigator.clipboard.writeText(json); console.log('Copied to clipboard.'); } catch { console.log('Copy the JSON above manually.'); }
+})();
+```
+
+### I – eredmény (2026-09-25, Cél site)
+
+- **I0, a valódi „Adele teszt” elem:** `AuthorId` = `other`, `EditorId` = `other`, `ValakiId` = `other`, egyetlen verzió (1.0), amelyet szintén `other` hozott létre. **A CopyJet 1.3.2.0 tehát helyesen állította be a szerzőt.** A felületen látott „telepítő a létrehozó” valószínűleg a „Teszt mappa” mappa létrehozója volt: a mappát a telepítő hozza létre.
+- **I1 (verziózott lista), I2 (Módosítva < Létrehozva), I3 (mindkettő):** mindenhol ✅ `other`.
+- **Ismert korlát, a dátumok pontossága:** a site rövid dátum-idő formátuma percre pontos, ezért a másodpercek elvesznek (07:54:16 → 07:54:00, I0/I2/I3). A felületen ez nem látszik. Ha kellene, másodperces formátumot külön kísérlettel kellene kipróbálni.
+
+→ **Spike 08 lezárva.** A Létrehozta/Módosította másik felhasználóra a létrehozó hívásban működik (G, H, I). Mappa, tartalomtípus, `$batch`, verziókezelés és a dátumok sorrendje nem befolyásolja.

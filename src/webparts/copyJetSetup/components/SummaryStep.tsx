@@ -2,11 +2,12 @@ import * as React from 'react';
 import type { SPFI } from '@pnp/sp';
 import * as strings from 'CopyJetSetupWebPartStrings';
 import { extractTemplate } from '../../../core/engine';
+import { lookupTargetsWithoutContent } from '../../../core/items';
 import { Logger } from '../../../core/logger';
 import type { ArtifactKind, IArtifactRef, ICopyJetTemplate, IDiscoveredArtifact } from '../../../core/model';
 import { Button, Message, Stats, ui } from '../../../shared/components/ui';
 import { Spinner } from '@fluentui/react';
-import { format } from './selection';
+import { canCopyItems, format } from './selection';
 
 export interface ISummaryStepProps {
   sp: SPFI;
@@ -17,6 +18,10 @@ export interface ISummaryStepProps {
   kindLabel: (kind: ArtifactKind) => string;
   /** Lists copied with items and their item count (from the discovery); items are not read in the dry run. */
   content: { lists: number; items: number; personal: boolean };
+  /** List ref keys ('list:K') copied with content. */
+  contentKeys: string[];
+  /** Switches content on for these list ref keys. */
+  onAddContent: (keys: string[]) => void;
   onAddMissing: (keys: string[]) => void;
 }
 
@@ -29,7 +34,7 @@ interface IAnalysis {
  * Step 3 (docs/ui setup-3): a dry run of the extraction shows what the template will contain and which
  * dependencies are missing from the selection. It covers the structure only: items are read at export.
  */
-export const SummaryStep: React.FC<ISummaryStepProps> = ({ sp, refs, discovered, name, createdBy, kindLabel, content, onAddMissing }) => {
+export const SummaryStep: React.FC<ISummaryStepProps> = ({ sp, refs, discovered, name, createdBy, kindLabel, content, contentKeys, onAddContent, onAddMissing }) => {
   const [analysis, setAnalysis] = React.useState<IAnalysis | undefined>(undefined);
   const [error, setError] = React.useState<string | undefined>(undefined);
   const selectionKey = refs.map((r) => r.key).join('|');
@@ -54,6 +59,13 @@ export const SummaryStep: React.FC<ISummaryStepProps> = ({ sp, refs, discovered,
   }
 
   const t = analysis.template;
+  // Lookup targets of content lists that travel without items: their lookup values would stay empty.
+  const withoutContent = lookupTargetsWithoutContent(
+    t,
+    contentKeys.map((k) => k.replace(/^list:/, ''))
+  )
+    .map((key) => discovered.filter((a) => a.ref.key === `list:${key}`)[0])
+    .filter((a) => !!a && canCopyItems(a));
   const listFields = t.lists.reduce((n, l) => n + (l.fields || []).length, 0);
   const views = t.lists.reduce((n, l) => n + (l.views || []).length, 0);
 
@@ -70,6 +82,21 @@ export const SummaryStep: React.FC<ISummaryStepProps> = ({ sp, refs, discovered,
             <React.Fragment key={m.ref.key}>
               {i > 0 && ', '}
               <em>{m.title}</em> ({kindLabel(m.ref.kind).toLowerCase()})
+            </React.Fragment>
+          ))}
+        </Message>
+      )}
+      {withoutContent.length > 0 && (
+        <Message
+          kind="warning"
+          title={format(strings.ContentMissingTitle, withoutContent.length)}
+          action={<Button text={strings.AddContent} onClick={() => onAddContent(withoutContent.map((a) => a.ref.key))} />}
+        >
+          {strings.ContentMissingNote}{' '}
+          {withoutContent.map((a, i) => (
+            <React.Fragment key={a.ref.key}>
+              {i > 0 && ', '}
+              <em>{a.title}</em>
             </React.Fragment>
           ))}
         </Message>

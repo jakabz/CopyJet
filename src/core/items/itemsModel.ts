@@ -33,3 +33,20 @@ export function listItemsDefs(template: ICopyJetTemplate): IListItemsDef[] {
     .filter((l) => l.content && l.content.mode === 'items' && !!l.content.source)
     .map((l) => ({ listKey: l.key, listUrl: l.url, source: l.content.source!, lookupTargets: lookupTargets(l) }));
 }
+
+/**
+ * Lists of the template whose items are not carried although a list copied with content looks up to them:
+ * those lookup values would stay empty on the target. `contentListKeys` are the keys copied with content.
+ */
+export function lookupTargetsWithoutContent(template: ICopyJetTemplate, contentListKeys: string[]): string[] {
+  const out: string[] = [];
+  template.lists
+    .filter((l) => contentListKeys.indexOf(l.key) >= 0)
+    .forEach((l) =>
+      lookupTargets(l).forEach((target) => {
+        const inTemplate = template.lists.some((x) => x.key === target);
+        if (inTemplate && contentListKeys.indexOf(target) < 0 && out.indexOf(target) < 0) out.push(target);
+      })
+    );
+  return out;
+}

@@ -1,7 +1,7 @@
 import { ItemExtractor, ITEM_PAGE_SIZE } from '../../src/core/extractors/ItemExtractor';
 import { ItemLookupProvider } from '../../src/core/providers/ItemLookupProvider';
 import { ItemProvider } from '../../src/core/providers/ItemProvider';
-import { listItemsDefs, type IListItemsDef } from '../../src/core/items';
+import { listItemsDefs, lookupTargetsWithoutContent, type IListItemsDef } from '../../src/core/items';
 import { loadSourceSite, toListDef } from '../../src/core/lists';
 import { Logger } from '../../src/core/logger';
 import { PrincipalMapper } from '../../src/core/mapping';
@@ -359,5 +359,17 @@ describe('ItemProvider + ItemLookupProvider', () => {
       'Item 3 could not be written: CJNum: Itt csak számok szerepelhetnek.'
     ]);
     expect(lists[T_TEST].items).toEqual([]);
+  });
+});
+
+describe('lookupTargetsWithoutContent', () => {
+  it('names template lists that content lists look up to but that travel without items', async () => {
+    const reader = await extractPackage();
+    const template = { ...reader.manifest, lists: reader.manifest.lists.map((l) => ({ ...l, content: { mode: 'none' as const } })) };
+    expect(lookupTargetsWithoutContent(template, ['Teszt_lista'])).toEqual(['Teszt_lookup_forrs']);
+    expect(lookupTargetsWithoutContent(template, ['Teszt_lista', 'Teszt_lookup_forrs'])).toEqual([]);
+    expect(lookupTargetsWithoutContent(template, ['Teszt_lookup_forrs'])).toEqual([]);
+    // A target outside the template is the missing-dependency check's business, not this one's.
+    expect(lookupTargetsWithoutContent({ ...template, lists: template.lists.filter((l) => l.key === 'Teszt_lista') }, ['Teszt_lista'])).toEqual([]);
   });
 });

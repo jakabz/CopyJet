@@ -76,6 +76,9 @@ declare interface ICopyJetSetupWebPartStrings {
   MissingTitle: string;
   MissingNote: string;
   AddAll: string;
+  ContentMissingTitle: string;
+  ContentMissingNote: string;
+  AddContent: string;
   StatLists: string;
   StatColumns: string;
   StatViews: string;

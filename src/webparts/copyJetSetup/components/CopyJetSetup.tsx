@@ -164,6 +164,8 @@ const CopyJetSetup: React.FC<ICopyJetSetupProps> = ({ sp, siteTitle, createdBy }
         createdBy={createdBy}
         kindLabel={kindLabel}
         content={{ lists: contentLists.length, items: contentLists.reduce((n, a) => n + (a.itemCount || 0), 0), personal: contentLists.length > 0 && state.preserveAuthors }}
+        contentKeys={state.content}
+        onAddContent={(keys) => keys.forEach((key) => dispatch({ type: 'content', key, on: true }))}
         onAddMissing={(keys) => dispatch({ type: 'addMissing', keys })}
       />
     );
