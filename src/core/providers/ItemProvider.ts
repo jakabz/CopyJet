@@ -25,7 +25,7 @@ import {
 } from '../items';
 import { formatSpDateTime, type IWebLocale } from '../items/locale';
 import type { LocalTimeConverter } from '../items/localTime';
-import { listContentTypeFor, listFolderPaths, missingFolders, readListContentTypes, toServerRelativeUrl } from '../lists';
+import { createFolder, existingFolderPaths, listContentTypeFor, missingFolders, readListContentTypes, toServerRelativeUrl } from '../lists';
 import type { ConflictMode, IApplyResult, IArtifactRef, IContentContext, IDiffResult, IInstallContext, IItemsFile, IProvider } from '../model';
 
 export interface IItemProviderOptions {
@@ -82,22 +82,17 @@ export class ItemProvider implements IProvider<IListItemsDef> {
     throwIfAborted(ctx.signal);
     const ref: IArtifactRef = { kind: this.kind, key: itemsKey(def.listKey) };
     const list = sp.web.getList(itemsListUrl(def, ctx));
-    let info: { ItemCount: number };
+    let found: Array<{ Id: number }>;
     try {
-      info = await list.select('ItemCount')<{ ItemCount: number }>();
+      // Asked directly every time: ItemCount counts folders and is not a safe "empty" signal (spike 08 F).
+      found = await list.items.filter('FSObjType eq 0').select('Id').top(1)<Array<{ Id: number }>>();
     } catch (e) {
       if (isHttpStatus(e, 404)) return { ref, status: 'unsupported', changes: ['listMissing'] };
-      throw e;
+      // Refused (large list without index): only a list that is empty by count is empty.
+      const info = await list.select('ItemCount')<{ ItemCount: number }>();
+      return info.ItemCount > 0 ? { ref, status: 'different', changes: ['targetHasItems'] } : { ref, status: 'new' };
     }
-    if (info.ItemCount === 0) return { ref, status: 'new' };
-    // ItemCount includes folders (the ListProvider may just have created them).
-    let hasItems = true;
-    try {
-      hasItems = (await list.items.filter('FSObjType eq 0').select('Id').top(1)<Array<{ Id: number }>>()).length > 0;
-    } catch {
-      // over the view threshold without an index: assume there are items
-    }
-    return hasItems ? { ref, status: 'different', changes: ['targetHasItems'] } : { ref, status: 'new' };
+    return found.length > 0 ? { ref, status: 'different', changes: ['targetHasItems'] } : { ref, status: 'new' };
   }
 
   public async apply(sp: SPFI, def: IListItemsDef, _mode: ConflictMode, ctx: IInstallContext): Promise<IApplyResult> {
@@ -118,6 +113,7 @@ export class ItemProvider implements IProvider<IListItemsDef> {
   private async _write(sp: SPFI, def: IListItemsDef, ref: IArtifactRef, ctx: IInstallContext): Promise<IApplyResult> {
     const content = contentContext(ctx);
     const file = await content.reader.getJson<IItemsFile>(def.source, ctx.signal);
+    ctx.log.info(`The target list has no items; writing ${file.items.length}.`, { artifact: ref, code: 'ITEMS_TARGET_EMPTY' });
     const listUrl = itemsListUrl(def, ctx);
     const fields = await readTargetFields(sp, listUrl, def.listKey, ctx.tokens);
     this._warnMissingFields(file.items, fields, ref, ctx);
@@ -127,7 +123,7 @@ export class ItemProvider implements IProvider<IListItemsDef> {
     await times.prepare(dateValuesOf(file.items, fields, 'all'), ctx.signal);
     await content.principals.map(principalKeysOf(file.items, fields), ctx.tokens, ctx.log, ctx.signal);
     await this._ensureFolders(sp, listUrl, file.items, ref, ctx);
-    const contentTypes = (await readListContentTypes(sp, listUrl)).all;
+    const contentTypes = await readListContentTypes(sp, listUrl);
 
     const missingCts: { [id: string]: boolean } = {};
     const ops = file.items.map((item) => {
@@ -181,10 +177,11 @@ export class ItemProvider implements IProvider<IListItemsDef> {
   private async _ensureFolders(sp: SPFI, listUrl: string, items: TemplateItem[], ref: IArtifactRef, ctx: IInstallContext): Promise<void> {
     const wanted = items.map((i) => i.folder).filter((f, i, all): f is string => !!f && all.indexOf(f) === i);
     if (!wanted.length) return;
-    const create = missingFolders(wanted, await listFolderPaths(sp, listUrl, ctx.signal));
+    // Items are copied into custom lists only (library files come with the file copy).
+    const create = missingFolders(wanted, await existingFolderPaths(sp, listUrl, false, ctx.signal));
     for (const path of create) {
       throwIfAborted(ctx.signal);
-      await sp.web.folders.addUsingPath(`${listUrl}/${path}`);
+      await createFolder(sp, listUrl, path, false);
     }
     if (create.length) ctx.log.info(`Folders created for items: ${create.length}.`, { artifact: ref });
   }

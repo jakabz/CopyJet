@@ -91,7 +91,7 @@ export const ExportStep: React.FC<IExportStepProps> = ({ sp, refs, discovered, n
       {status === 'done' && <Message kind="success">{strings.ExportDone}</Message>}
       {status === 'stopped' && <Message kind="note">{strings.ExportStopped}</Message>}
       {error && <Message kind="error" title={strings.ExportFailed}>{error}</Message>}
-      <LogViewer logger={logger} labels={logLabels} />
+      <LogViewer logger={logger} labels={logLabels} exportName={fileName.replace(/\.(zip|json)$/, '-log')} />
       <div className={`${ui.box} ${styles.output}`}>
         <div className={styles.outputText}>
           <span className={ui.strong}>{strings.Output}</span>

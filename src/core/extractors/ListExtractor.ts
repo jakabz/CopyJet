@@ -86,7 +86,7 @@ export class ListExtractor implements IExtractor<IList> {
     ]);
     if (cts && cts.ordered.length) {
       // Site-level IDs, default first; the list-level IDs are regenerated on the target.
-      def.contentTypes = cts.ordered.map(siteContentTypeIdOf);
+      def.contentTypes = cts.ordered.map((id) => siteContentTypeIdOf(id, cts));
     }
     if (folders.length) {
       def.folders = folders.map((path) => ({ path }));

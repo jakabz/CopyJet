@@ -19,6 +19,10 @@ const ANNA = 'i:0#.f|membership|anna@contoso.com';
 const SITE_CT = `0x0100${'A'.repeat(32)}`;
 const SOURCE_LIST_CT = `${SITE_CT}00${'B'.repeat(32)}`;
 const TARGET_LIST_CT = `${SITE_CT}00${'C'.repeat(32)}`;
+// Item on a list can be 0x01 + 00 + GUID + 00 + GUID; only the REST Parent tells it is 0x01 (spike 08 F).
+const SOURCE_ITEM_CT = `0x0100${'E'.repeat(32)}00${'F'.repeat(32)}`;
+const TARGET_ITEM_CT = `0x0100${'1'.repeat(32)}00${'2'.repeat(32)}`;
+const listCts = (pairs: Array<[string, string]>): Array<{ StringId: string; Parent: { StringId: string } }> => pairs.map(([StringId, parent]) => ({ StringId, Parent: { StringId: parent } }));
 
 type Raw = { [k: string]: unknown };
 
@@ -37,11 +41,11 @@ const sourceItems: { [listUrl: string]: Raw[] } = {
   [TEST_LIST]: [
     { ID: 1, FSObjType: 0, FileDirRef: TEST_LIST, ContentTypeId: SOURCE_LIST_CT, AuthorId: 7, EditorId: 9, Created: '2026-03-02T08:15:00Z', Modified: '2026-07-16T11:30:00Z', Title: 'Első', CJNum: 12.5, CJDate: '2026-03-02T08:15:00Z', ValakiId: 7, ListaLookupId: 2 },
     { ID: 2, FSObjType: 1, FileDirRef: TEST_LIST, Title: '2026' },
-    { ID: 3, FSObjType: 0, FileDirRef: `${TEST_LIST}/2026/Q1`, ContentTypeId: SOURCE_LIST_CT, AuthorId: 7, EditorId: 7, Created: '2026-01-15T10:00:00Z', Modified: '2026-01-15T10:00:00Z', Title: 'Mappában', CJNum: null, ValakiId: null, ListaLookupId: null }
+    { ID: 3, FSObjType: 0, FileDirRef: `${TEST_LIST}/2026/Q1`, ContentTypeId: SOURCE_ITEM_CT, AuthorId: 7, EditorId: 7, Created: '2026-01-15T10:00:00Z', Modified: '2026-01-15T10:00:00Z', Title: 'Mappában', CJNum: null, ValakiId: null, ListaLookupId: null }
   ],
   [LOOKUP_LIST]: [
-    { ID: 1, FSObjType: 0, FileDirRef: LOOKUP_LIST, ContentTypeId: SOURCE_LIST_CT, AuthorId: 7, EditorId: 7, Created: '2026-01-01T10:00:00Z', Modified: '2026-01-01T10:00:00Z', Title: 'Egy' },
-    { ID: 2, FSObjType: 0, FileDirRef: LOOKUP_LIST, ContentTypeId: SOURCE_LIST_CT, AuthorId: 7, EditorId: 7, Created: '2026-01-01T10:00:00Z', Modified: '2026-01-01T10:00:00Z', Title: 'Kettő' }
+    { ID: 1, FSObjType: 0, FileDirRef: LOOKUP_LIST, ContentTypeId: SOURCE_ITEM_CT, AuthorId: 7, EditorId: 7, Created: '2026-01-01T10:00:00Z', Modified: '2026-01-01T10:00:00Z', Title: 'Egy' },
+    { ID: 2, FSObjType: 0, FileDirRef: LOOKUP_LIST, ContentTypeId: SOURCE_ITEM_CT, AuthorId: 7, EditorId: 7, Created: '2026-01-01T10:00:00Z', Modified: '2026-01-01T10:00:00Z', Title: 'Kettő' }
   ]
 };
 
@@ -59,6 +63,10 @@ function sourceSp(items = sourceItems): { sp: ReturnType<typeof createMockSp>['s
       };
     }
     if (req.method === 'GET' && /\/getList\('[^']+'\)\/fields\?\$select=/i.test(req.url)) return { body: sourceFields };
+    if (req.method === 'GET' && /\/getList\('[^']+'\)\/rootFolder\?\$select=ContentTypeOrder$/i.test(req.url)) return { body: { ContentTypeOrder: [{ StringValue: SOURCE_ITEM_CT }] } };
+    if (req.method === 'GET' && /\/getList\('[^']+'\)\/contentTypes\?\$select=StringId,Parent\/StringId&\$expand=Parent$/i.test(req.url)) {
+      return { body: listCts([[SOURCE_LIST_CT, SITE_CT], [SOURCE_ITEM_CT, '0x01']]) };
+    }
     if (req.method === 'GET' && (m = /\/getList\('([^']+)'\)\/items\?.*\$filter=ID gt (\d+).*\$top=(\d+)/i.exec(req.url))) {
       const after = Number(m[2]);
       return { body: (items[m[1]] || []).filter((i) => (i.ID as number) > after).slice(0, Number(m[3])) };
@@ -117,7 +125,7 @@ describe('ItemExtractor', () => {
       {
         sourceId: 3,
         folder: '2026/Q1',
-        contentType: SITE_CT,
+        contentType: '0x01',
         values: { Title: 'Mappában' },
         system: { author: '{principal:anna}', editor: '{principal:anna}', created: '2026-01-15T10:00:00Z', modified: '2026-01-15T10:00:00Z' }
       }
@@ -172,6 +180,9 @@ function targetSp(
     if (req.method === 'GET' && (m = /\/getList\('([^']+)'\)\?\$select=Id$/i.exec(req.url))) {
       return list(m[1]) ? { body: { Id: 'x' } } : { status: 404, body: {} };
     }
+    if (req.method === 'GET' && (m = /\/getList\('([^']+)'\)\/items\?\$filter=FSObjType eq 1&\$select=FileRef/i.exec(req.url))) {
+      return { body: list(m[1])!.folders.map((f) => ({ FileRef: `${m![1]}/${f}` })) };
+    }
     if (req.method === 'GET' && (m = /\/getList\('([^']+)'\)\/items\?\$filter=FSObjType eq 0/i.exec(req.url))) {
       return { body: list(m[1])!.items.slice(0, 1).map((i) => ({ Id: i.ID })) };
     }
@@ -182,29 +193,26 @@ function targetSp(
       const login = (req.body as { logonName: string }).logonName;
       return knownUsers.indexOf(login) >= 0 ? { body: { Id: 5, LoginName: login } } : { status: 500, body: { 'odata.error': { message: { value: 'not found' } } } };
     }
-    if (req.method === 'GET' && (m = /\/getFolderByServerRelativePath\(decodedUrl='([^']+)'\)\/folders\?\$select=Name$/i.exec(req.url))) {
-      const url = m[1];
-      const owner = Object.keys(lists).filter((u) => url === u || url.indexOf(`${u}/`) === 0)[0];
-      const rel = url === owner ? '' : url.slice(owner.length + 1);
-      const names = lists[owner].folders.filter((f) => f.indexOf('/') < 0 || rel).filter((f) => (rel ? f.indexOf(`${rel}/`) === 0 && f.split('/').length === rel.split('/').length + 1 : f.indexOf('/') < 0));
-      return { body: names.map((f) => ({ Name: f.split('/').pop() })) };
-    }
-    if (req.method === 'POST' && (m = /\/_api\/web\/folders\/addUsingPath\(DecodedUrl='([^']+)'/i.exec(req.url))) {
-      const url = m[1];
-      const owner = Object.keys(lists).filter((u) => url.indexOf(`${u}/`) === 0)[0];
-      lists[owner].folders.push(url.slice(owner.length + 1));
-      return { body: {} };
-    }
     if (req.method === 'GET' && (m = /\/getList\('([^']+)'\)\/rootFolder\?\$select=ContentTypeOrder$/i.exec(req.url))) {
-      return { body: { ContentTypeOrder: [{ StringValue: TARGET_LIST_CT }] } };
+      return { body: { ContentTypeOrder: [{ StringValue: TARGET_ITEM_CT }, { StringValue: TARGET_LIST_CT }] } };
     }
-    if (req.method === 'GET' && (m = /\/getList\('([^']+)'\)\/contentTypes\?\$select=StringId$/i.exec(req.url))) {
-      return { body: [{ StringId: TARGET_LIST_CT }, { StringId: `0x012000${'D'.repeat(32)}` }] };
+    if (req.method === 'GET' && (m = /\/getList\('([^']+)'\)\/contentTypes\?\$select=StringId,Parent\/StringId&\$expand=Parent$/i.exec(req.url))) {
+      return { body: listCts([[TARGET_ITEM_CT, '0x01'], [TARGET_LIST_CT, SITE_CT], [`0x012000${'D'.repeat(32)}`, '0x0120']]) };
     }
     if (req.method === 'POST' && (m = /\/getList\('([^']+)'\)\/AddValidateUpdateItemUsingPath\(\)$/i.exec(req.url))) {
       const l = list(m[1])!;
-      const body = req.body as { formValues: Array<{ FieldName: string; FieldValue: string }>; listItemCreateInfo: { FolderPath: { DecodedUrl: string } } };
+      const body = req.body as {
+        formValues: Array<{ FieldName: string; FieldValue: string }>;
+        listItemCreateInfo: { FolderPath: { DecodedUrl: string }; LeafName?: { DecodedUrl: string }; UnderlyingObjectType?: number };
+      };
       const folder = body.listItemCreateInfo.FolderPath.DecodedUrl;
+      if (body.listItemCreateInfo.UnderlyingObjectType === 1) {
+        // A list folder (spike 08 E): its parent must exist.
+        const parent = folder === m[1] ? '' : folder.slice(m[1].length + 1);
+        if (parent && l.folders.indexOf(parent) < 0) return { status: 500, body: { 'odata.error': { message: { value: 'folder missing' } } } };
+        l.folders.push(parent ? `${parent}/${body.listItemCreateInfo.LeafName!.DecodedUrl}` : body.listItemCreateInfo.LeafName!.DecodedUrl);
+        return { body: { value: [{ FieldName: 'Id', FieldValue: String(++seq), HasException: false }] } };
+      }
       if (folder !== m[1] && l.folders.indexOf(folder.slice(m[1].length + 1)) < 0) return { status: 500, body: { 'odata.error': { message: { value: 'folder missing' } } } };
       const bad = body.formValues.filter((v) => v.FieldName === 'CJNum' && /\./.test(v.FieldValue));
       if (bad.length) return { body: { value: [{ FieldName: 'CJNum', FieldValue: bad[0].FieldValue, HasException: true, ErrorMessage: 'Itt csak számok szerepelhetnek.' }] } };
@@ -271,11 +279,12 @@ describe('ItemProvider + ItemLookupProvider', () => {
     expect((await items.diff(sp, def('Teszt_lista'), ctx)).status).toBe('new');
     expect(await items.apply(sp, def('Teszt_lookup_forrs'), 'skip', ctx)).toMatchObject({ outcome: 'created' });
     expect(await items.apply(sp, def('Teszt_lista'), 'skip', ctx)).toMatchObject({ outcome: 'created' });
-    expect(ctx.content!.idMaps).toEqual({ Teszt_lookup_forrs: { 1: 101, 2: 102 }, Teszt_lista: { 1: 103, 3: 104 } });
+    // The two folders (2026, 2026/Q1) are list items too and take IDs 103 and 104.
+    expect(ctx.content!.idMaps).toEqual({ Teszt_lookup_forrs: { 1: 101, 2: 102 }, Teszt_lista: { 1: 105, 3: 106 } });
 
     const [first, inFolder] = lists[T_TEST].items;
     expect(first).toEqual({
-      ID: 103,
+      ID: 105,
       folder: T_TEST,
       Title: 'Első',
       CJNum: '12,5',
@@ -287,6 +296,7 @@ describe('ItemProvider + ItemLookupProvider', () => {
       Modified: '2026. 07. 16. 13:30'
     });
     expect(inFolder.folder).toBe(`${T_TEST}/2026/Q1`);
+    expect(inFolder.ContentTypeId).toBe(TARGET_ITEM_CT);
     expect(lists[T_TEST].folders).toEqual(['2026', '2026/Q1']);
 
     const lookups = new ItemLookupProvider({ batched: false });

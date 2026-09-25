@@ -17,7 +17,7 @@ import {
   type IItemField,
   type ISiteUserLike
 } from '../items';
-import { loadSourceSite, siteContentTypeIdOf } from '../lists';
+import { loadSourceSite, readListContentTypes, siteContentTypeIdOf } from '../lists';
 import type { IArtifactRef, IDiscoveredArtifact, IExtractOptions, IExtractor, IItemsFile, ITemplateWriter } from '../model';
 import type { IListItemsDef } from '../items';
 
@@ -59,9 +59,10 @@ export class ItemExtractor implements IExtractor<IListItemsDef> {
       }
       const listUrl = l.info.RootFolder.ServerRelativeUrl;
       const list = sp.web.getList(listUrl);
-      const infos = await list.fields.select('InternalName', 'TypeAsString', 'Hidden', 'ReadOnlyField')<
-        Array<{ InternalName: string; TypeAsString: string; Hidden: boolean; ReadOnlyField: boolean }>
-      >();
+      const [infos, cts] = await Promise.all([
+        list.fields.select('InternalName', 'TypeAsString', 'Hidden', 'ReadOnlyField')<Array<{ InternalName: string; TypeAsString: string; Hidden: boolean; ReadOnlyField: boolean }>>(),
+        readListContentTypes(sp, listUrl)
+      ]);
       const fields = infos.map(toItemField).filter((f): f is IItemField => !!f);
       infos
         .filter((f) => !f.Hidden && NOT_YET_COPIED_TYPES.indexOf(f.TypeAsString) >= 0)
@@ -85,7 +86,7 @@ export class ItemExtractor implements IExtractor<IListItemsDef> {
             const item: IItemsFile['items'][number] = { sourceId: raw.ID, values: {} };
             const dir = raw.FileDirRef || '';
             if (dir.toLowerCase().indexOf(`${listUrl.toLowerCase()}/`) === 0) item.folder = dir.slice(listUrl.length + 1);
-            if (raw.ContentTypeId) item.contentType = siteContentTypeIdOf(raw.ContentTypeId);
+            if (raw.ContentTypeId) item.contentType = siteContentTypeIdOf(raw.ContentTypeId, cts);
             fields.forEach((f) => {
               const v = toTemplateValue(f, raw[restPropertyOf(f)], ctx);
               if (v !== undefined) item.values[f.internalName] = v;

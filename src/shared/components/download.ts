@@ -11,9 +11,14 @@ export function downloadBlob(blob: Blob, fileName: string): void {
   setTimeout(() => URL.revokeObjectURL(url), 10000);
 }
 
-/** "Projekt sablon" + date → "Projekt-sablon-2026-09-24.json". */
+/** Local date and time for file names, without characters Windows forbids: "2026-09-25_09-31-05". */
+export function fileTimestamp(date: Date): string {
+  const p = (n: number): string => (n < 10 ? `0${n}` : String(n));
+  return `${date.getFullYear()}-${p(date.getMonth() + 1)}-${p(date.getDate())}_${p(date.getHours())}-${p(date.getMinutes())}-${p(date.getSeconds())}`;
+}
+
+/** "Projekt sablon" + local time → "Projekt-sablon-2026-09-25_09-31-05.json". */
 export function templateFileName(name: string, date: Date, extension: string): string {
   const base = name.trim().replace(/[\\/:*?"<>|#%]+/g, '').replace(/\s+/g, '-') || 'copyjet';
-  const d = date.toISOString().slice(0, 10);
-  return `${base}-${d}.${extension}`;
+  return `${base}-${fileTimestamp(date)}.${extension}`;
 }

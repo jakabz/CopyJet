@@ -567,3 +567,83 @@ Előkészítés rendben: mindkét oszlop létrejött, a tartalomtípusok és a m
 - A Létrehozta/Módosította **másik** felhasználóra nincs igazolva. Ezt az első valódi telepítés napló ellenőrzi (figyelmeztetés, ha nem állítható).
 
 Állapot: **lezárva** (a más szerzős eset a telepítési teszten ellenőrizendő).
+
+## F. vizsgálat – első valódi tartalomtelepítés (2026-09-25, 1.3.1.0)
+
+Setup: „Teszt lista” (4 elem) és „Teszt lookup forrás” (7 elem), mindkettő szerkezettel és tartalommal. Két egymás utáni telepítés a Cél site-ra:
+
+1. **1. futás:**
+   - `list:Teszt_lista`: `LIST_CT_FAILED`. A lista tartalomtípusa (`0x01003E7F…E4E9`) nincs meg a Cél site-on, és nem került be a sablonba, ezért a lista összes oszlopa, nézete és eleme kimaradt.
+   - A „Teszt lookup forrás” elemei rendben: 7 / 7.
+2. **2. futás:**
+   - A „Teszt lista” már létezett („eltér, megtartva”). Oszlopok, nézetek, 3 / 4 elem, lookupok 3 / 3.
+   - A 7. elem hibája: HTTP 500, „Érvénytelen URL-érték”.
+   - **A „Teszt lookup forrás” elemei újra beíródtak (7 / 7).** Az üres-lista-vizsgálatnak ezt meg kellett volna akadályoznia.
+   - Mindkét listán `ITEM_CONTENT_TYPE_MISSING` jelent meg.
+
+Kérdések: melyik tartalomtípus ez, és miért nem ajánlotta fel a Setup függőségként? Miért ítélte üresnek a célt az `ItemProvider`? Mi a 7. elem URL-értéke?
+
+Csak olvas. Futtasd a Forrás és a Cél site-on is:
+
+```js
+(async () => {
+  const guess = location.origin + ((location.pathname.match(/^\/(?:sites|teams)\/[^\/]+/i) || [''])[0]);
+  const H = { Accept: 'application/json;odata=nometadata' };
+  const get = async (url) => { const r = await fetch(url, { headers: H }); return r.ok ? r.json() : { httpStatus: r.status, error: (await r.text()).slice(0, 200) }; };
+  const webInfo = await get(guess + '/_api/web?$select=Url,ServerRelativeUrl,Title');
+  const web = webInfo.Url, rel = webInfo.ServerRelativeUrl.replace(/\/$/, '');
+  const enc = (s) => encodeURIComponent(s.replace(/'/g, "''"));
+  const hide = (s) => (typeof s === 'string' ? s.split(location.host).join('contoso.sharepoint.com') : s);
+  const out = { site: webInfo.Title, lists: {} };
+  for (const url of ['Lists/Teszt lista', 'Lists/Teszt lookup forrs']) {
+    const LIST = `${web}/_api/web/getList('${enc(rel + '/' + url)}')`;
+    const info = await get(`${LIST}?$select=Title,ItemCount,ContentTypesEnabled`);
+    if (info.httpStatus) { out.lists[url] = info; continue; }
+    const o = (out.lists[url] = { title: info.Title, ItemCount: info.ItemCount, ContentTypesEnabled: info.ContentTypesEnabled });
+    // Content types of the list and their parent site content types (FeatureId = shipped by a feature).
+    const cts = (await get(`${LIST}/contenttypes?$select=Name,StringId,Parent/StringId,Parent/Name&$expand=Parent`)).value || [];
+    o.contentTypes = [];
+    for (const c of cts) {
+      const site = await get(`${web}/_api/web/availablecontenttypes('${c.Parent.StringId}')?$select=Name,Group,Hidden,ReadOnly,Sealed&$expand=Parent`);
+      const feature = await get(`${web}/_api/web/availablecontenttypes('${c.Parent.StringId}')/SchemaXml`);
+      const fid = /FeatureId="([^"]+)"/.exec(feature.value || '');
+      o.contentTypes.push({ name: c.Name, listId: c.StringId, parentId: c.Parent.StringId, parentName: c.Parent.Name, siteCt: site.httpStatus ? `HTTP ${site.httpStatus}` : `${site.Name} / ${site.Group}${site.Hidden ? ' / hidden' : ''}`, featureId: fid ? fid[1] : null });
+    }
+    // Items: count by type and the content type of the first ones.
+    const items = (await get(`${LIST}/items?$select=Id,Title,FSObjType,ContentTypeId&$orderby=ID&$top=5000`)).value || [];
+    o.itemsRead = items.length;
+    o.folders = items.filter((i) => i.FSObjType === 1).length;
+    o.titles = items.filter((i) => i.FSObjType !== 1).map((i) => `${i.Id}: ${i.Title} (${String(i.ContentTypeId).slice(0, 12)}…${String(i.ContentTypeId).length})`);
+    // The two queries the ItemProvider uses to decide whether the list is empty.
+    o.providerCheck = { itemCount: info.ItemCount, filterFSObjType0: await get(`${LIST}/items?$filter=FSObjType eq 0&$select=Id&$top=1`) };
+    // URL columns and their values (host anonymised).
+    const urlFields = ((await get(`${LIST}/fields?$select=InternalName,TypeAsString&$filter=TypeAsString eq 'URL'`)).value || []).map((f) => f.InternalName);
+    if (urlFields.length) {
+      const vals = (await get(`${LIST}/items?$select=Id,${urlFields.join(',')}&$orderby=ID&$top=50`)).value || [];
+      o.urlValues = vals.map((v) => ({ id: v.Id, ...Object.fromEntries(urlFields.map((f) => [f, v[f] ? { Url: hide(v[f].Url), Description: hide(v[f].Description) } : null])) }));
+    }
+  }
+  const json = JSON.stringify(out, null, 2);
+  console.log(json);
+  try { await navigator.clipboard.writeText(json); console.log('Copied to clipboard.'); } catch { console.log('Copy the JSON above manually.'); }
+})();
+```
+
+### F – eredmény, Forrás (2026-09-25)
+
+- **A „tartalomtípus-hiba” oka a CopyJetben volt.** Mindkét listán az „Elem” lista-tartalomtípus alakja `0x01` + `00` + GUID + `00` + GUID (70 karakter). A REST `Parent` szerint a szülő a `0x01`. A string-darabolás (spike 04: „site ID + 00 + GUID”) csak egy GUID-ot vágott le, így `0x01003E7F…` jött ki, amely nem létezik. Ezért nem ajánlotta fel a Setup, és ezért nem tudta hozzáadni a Cél.
+  - **Javítás:** a `readListContentTypes` a `Parent/StringId`-t is lekéri, és a lista → site-tartalomtípus leképezés ebből megy (`siteContentTypeIdOf(id, cts)`, `listContentTypeFor(siteId, cts)`). A darabolás csak tartalék.
+  - A hiányzó tartalomtípus mostantól `LIST_CT_FAILED` **figyelmeztetés**, és a lista tovább települ, nem esik ki a teljes lista.
+- A „Teszt lista”-n nincs URL típusú oszlop, tehát a 7. elem „Érvénytelen URL-érték” hibája nem URL-mezőből jön. A sablonban szereplő 7. elem alapján vizsgálandó (mappa, személy).
+- A `FSObjType eq 0` szűrés a Forráson működik (`value: [{ Id: 1 }]`).
+
+### F – eredmény, Cél (2026-09-25)
+
+- **„Teszt lista”:** 3 elem, **0 mappa**, pedig a napló szerint a CopyJet létrehozott egyet (`web.folders.addUsingPath`). Egyéni listában ez csak egy puszta `SPFolder`, nem listamappa (`FSObjType = 1`). A bele írt elemet a SharePoint „Érvénytelen URL-érték” hibával (HTTP 500) utasítja el. Ez volt a 7. elem hibája, és az 1. fázis listamappáit is érintette.
+  - **Javítás:** egyéni listában a mappa `AddValidateUpdateItemUsingPath`-szal, `UnderlyingObjectType: 1` beállítással készül (spike 08 E), és a meglévőket a `FSObjType eq 1` elemek alapján ismeri fel (`listFolderItemPaths`). Tárban marad a `folders.addUsingPath`.
+- **„Teszt lookup forrás”:** 14 elem (7 duplikált). Most mindkét vizsgálat helyes (`ItemCount: 14`, a `FSObjType eq 0` szűrés talál elemet), a 2. futás üres-döntése utólag nem reprodukálható.
+  - **Javítás:** az `ItemCount === 0` rövidítés kikerült, a vizsgálat mindig a `FSObjType eq 0` lekérdezés. `ItemCount`-ot csak akkor használ, ha a szűrést a SharePoint elutasítja, és ilyenkor is csak a 0 számít üresnek. Íráskor `ITEMS_TARGET_EMPTY` info kerül a naplóba, hogy egy esetleges újabb eset nyomon követhető legyen.
+
+- **Megerősítés a sablonból** (`items/Teszt_lista.json`): a 7. elem (`"folder": "Teszt mappa"`) az egyetlen mappában lévő elem, és csak ez bukott el. A többi értéke egyszerű: szöveg, választás, szám, lookup, személy. A Létrehozta/Módosította itt egy másik felhasználó (`{principal:AdeleV}`), ez az 1.3.2.0 tesztjén derül ki.
+
+Állapot: **javítva az 1.3.2.0-ban**, valódi telepítéssel ellenőrizendő.

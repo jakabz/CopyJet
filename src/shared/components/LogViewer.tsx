@@ -19,6 +19,8 @@ export interface ILogViewerProps {
   labels: ILogViewerLabels;
   /** Show at most this many latest entries (exports contain all). */
   maxRows?: number;
+  /** When set, the header offers CSV / JSON downloads under this file name (without extension). */
+  exportName?: string;
 }
 
 const TAG: Record<LogLevel, TagKind> = { info: 'info', warn: 'diff', error: 'err' };
@@ -30,7 +32,7 @@ const time = (iso: string): string => {
 };
 
 /** Live log panel of the mockups: header with level filter, rows with time, level tag and message. */
-export const LogViewer: React.FC<ILogViewerProps> = ({ logger, labels, maxRows = 300 }) => {
+export const LogViewer: React.FC<ILogViewerProps> = ({ logger, labels, maxRows = 300, exportName }) => {
   const [entries, setEntries] = React.useState<ReadonlyArray<ILogEntry>>(logger.entries.slice());
   const [level, setLevel] = React.useState<LogLevel | 'all'>('all');
 
@@ -53,6 +55,16 @@ export const LogViewer: React.FC<ILogViewerProps> = ({ logger, labels, maxRows =
             </option>
           ))}
         </select>
+        {exportName && (
+          <>
+            <button type="button" className={styles.button} disabled={entries.length === 0} onClick={() => downloadLog(logger, exportName, 'csv')}>
+              {labels.exportCsv}
+            </button>
+            <button type="button" className={styles.button} disabled={entries.length === 0} onClick={() => downloadLog(logger, exportName, 'json')}>
+              {labels.exportJson}
+            </button>
+          </>
+        )}
       </div>
       <div className={log.rows} role="log" aria-live="polite">
         {shown.length === 0 && <div className={`${log.row} ${styles.muted}`}>{labels.empty}</div>}
