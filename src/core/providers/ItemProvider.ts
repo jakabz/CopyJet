@@ -3,9 +3,12 @@ import '@pnp/sp/webs';
 import '@pnp/sp/lists';
 import '@pnp/sp/items';
 import '@pnp/sp/folders';
+import '@pnp/sp/attachments';
 import { CopyJetError, throwIfAborted } from '../errors';
+import { limitConcurrency } from '../http/concurrency';
 import { isHttpStatus } from '../http/status';
 import {
+  attachmentFileName,
   dateValuesOf,
   isLookupKind,
   itemsKey,
@@ -161,7 +164,57 @@ export class ItemProvider implements IProvider<IListItemsDef> {
       throw new CopyJetError('ITEMS_FAILED', `None of the ${file.items.length} items could be written.`, failures.slice(0, 5));
     }
     ctx.log.info(`Items written: ${written} of ${file.items.length}.`, { artifact: ref });
+    await this._attachments(sp, listUrl, file.items, idMap, ref, ctx, (item) => systemFormValues(item, 'modified', locale, times, ctx));
     return { ref, outcome: 'created' };
+  }
+
+  /**
+   * Attachments of the written items, one item after the other within 4 in flight (spike 09 B). Each file makes
+   * a new version and sets Editor/Modified to the installer, so those are sent again afterwards; the extra
+   * versions stay in the history (known limit). A name already on the item (HTTP 400) is skipped.
+   */
+  private async _attachments(
+    sp: SPFI,
+    listUrl: string,
+    items: TemplateItem[],
+    idMap: { [sourceId: number]: number },
+    ref: IArtifactRef,
+    ctx: IInstallContext,
+    systemValues: (item: TemplateItem) => IFormValue[]
+  ): Promise<void> {
+    const content = contentContext(ctx);
+    const todo = items.filter((item) => item.attachments && item.attachments.length && idMap[item.sourceId]);
+    if (!todo.length) return;
+    let added = 0;
+    const failures: Array<{ sourceId: number; errors: string[] }> = [];
+    const results = await limitConcurrency(
+      todo.map((item) => async () => {
+        const target = sp.web.getList(listUrl).items.getById(idMap[item.sourceId]);
+        const errors: string[] = [];
+        for (const path of item.attachments!) {
+          throwIfAborted(ctx.signal);
+          try {
+            await target.attachmentFiles.add(attachmentFileName(path), await content.reader.getBlob(path, ctx.signal));
+            added++;
+          } catch (e) {
+            if (isHttpStatus(e, 400) && /-2130575257/.test(e instanceof Error ? e.message : '')) continue; // already there
+            errors.push(`${attachmentFileName(path)}: ${e instanceof Error ? e.message : String(e)}`);
+          }
+        }
+        const restore = systemValues(item);
+        if (restore.length) await target.validateUpdateListItem(restore, true);
+        if (errors.length) failures.push({ sourceId: item.sourceId, errors });
+      }),
+      4,
+      ctx.signal
+    );
+    results.forEach((r, i) => {
+      if (!r.ok) failures.push({ sourceId: todo[i].sourceId, errors: [r.error instanceof Error ? r.error.message : String(r.error)] });
+    });
+    failures.forEach((f) =>
+      ctx.log.warn(`Attachments of item ${f.sourceId} could not all be added: ${f.errors.join('; ')}`, { artifact: ref, code: 'ATTACHMENT_FAILED', detail: f })
+    );
+    ctx.log.info(`Attachments added: ${added}.`, { artifact: ref });
   }
 
   /** Values of columns the target list lacks would fail the whole item (spike 08 C): dropped with one warning each. */

@@ -50,3 +50,16 @@ export function lookupTargetsWithoutContent(template: ICopyJetTemplate, contentL
     );
   return out;
 }
+
+/**
+ * Package path of an item attachment: attachments/<listkey>/<source item ID>/<file name>. The schema's
+ * packagePath forbids ".." anywhere, so runs of dots in a name are reduced to one (reported by the caller).
+ */
+export function attachmentEntryPath(listKey: string, sourceId: number, fileName: string): string {
+  return `attachments/${listKey}/${sourceId}/${fileName.replace(/\.{2,}/g, '.')}`;
+}
+
+/** The attachment's file name on the target: the last segment of its package path. */
+export function attachmentFileName(path: string): string {
+  return path.slice(path.lastIndexOf('/') + 1);
+}

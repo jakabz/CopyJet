@@ -39,7 +39,7 @@ const sourceFields = [
 
 const sourceItems: { [listUrl: string]: Raw[] } = {
   [TEST_LIST]: [
-    { ID: 1, FSObjType: 0, FileDirRef: TEST_LIST, ContentTypeId: SOURCE_LIST_CT, AuthorId: 7, EditorId: 9, Created: '2026-03-02T08:15:00Z', Modified: '2026-07-16T11:30:00Z', Title: 'Első', CJNum: 12.5, CJDate: '2026-03-02T08:15:00Z', ValakiId: 7, ListaLookupId: 2 },
+    { ID: 1, FSObjType: 0, FileDirRef: TEST_LIST, ContentTypeId: SOURCE_LIST_CT, Attachments: true, AuthorId: 7, EditorId: 9, Created: '2026-03-02T08:15:00Z', Modified: '2026-07-16T11:30:00Z', Title: 'Első', CJNum: 12.5, CJDate: '2026-03-02T08:15:00Z', ValakiId: 7, ListaLookupId: 2 },
     { ID: 2, FSObjType: 1, FileDirRef: TEST_LIST, Title: '2026' },
     { ID: 3, FSObjType: 0, FileDirRef: `${TEST_LIST}/2026/Q1`, ContentTypeId: SOURCE_ITEM_CT, AuthorId: 7, EditorId: 7, Created: '2026-01-15T10:00:00Z', Modified: '2026-01-15T10:00:00Z', Title: 'Mappában', CJNum: null, ValakiId: null, ListaLookupId: null }
   ],
@@ -63,6 +63,11 @@ function sourceSp(items = sourceItems): { sp: ReturnType<typeof createMockSp>['s
       };
     }
     if (req.method === 'GET' && /\/getList\('[^']+'\)\/fields\?\$select=/i.test(req.url)) return { body: sourceFields };
+    if (req.method === 'GET' && (m = /\/getList\('([^']+)'\)\/items\((\d+)\)\/AttachmentFiles\?\$select=FileName,ServerRelativeUrl$/i.exec(req.url))) {
+      const dir = `${m[1]}/Attachments/${m[2]}`;
+      return { body: [{ FileName: 'Ékezetes név.txt', ServerRelativeUrl: `${dir}/Ékezetes név.txt` }, { FileName: 'jelentes..v2.pdf', ServerRelativeUrl: `${dir}/jelentes..v2.pdf` }] };
+    }
+    if (req.method === 'GET' && (m = /\/getFileByServerRelativePath\(decodedUrl='([^']+)'\)\/\$value$/i.exec(req.url))) return { body: `content of ${m[1].split('/').pop()}` };
     if (req.method === 'GET' && /\/getList\('[^']+'\)\/rootFolder\?\$select=ContentTypeOrder$/i.test(req.url)) return { body: { ContentTypeOrder: [{ StringValue: SOURCE_ITEM_CT }] } };
     if (req.method === 'GET' && /\/getList\('[^']+'\)\/contentTypes\?\$select=StringId,Parent\/StringId&\$expand=Parent$/i.test(req.url)) {
       return { body: listCts([[SOURCE_LIST_CT, SITE_CT], [SOURCE_ITEM_CT, '0x01']]) };
@@ -102,7 +107,7 @@ async function extractPackage(): Promise<ITemplateReader> {
     { includeContent: true, includeVersions: false, includeMembers: false, tokens: site.tokens, log },
     writer
   );
-  expect(log.entries.filter((e) => e.level === 'warn').map((e) => e.code)).toEqual(['ITEM_FIELD_NOT_COPIED', 'ITEM_FIELD_NOT_COPIED']);
+  expect(log.entries.filter((e) => e.level === 'warn').map((e) => e.code)).toEqual(['ITEM_FIELD_NOT_COPIED', 'ATTACHMENT_RENAMED', 'ITEM_FIELD_NOT_COPIED']);
   return openTemplate(await writer.finalize());
 }
 
@@ -110,7 +115,7 @@ describe('ItemExtractor', () => {
   it('writes items/<key>.json, marks the list content and collects principals', async () => {
     const reader = await extractPackage();
     const teszt = reader.manifest.lists.filter((l) => l.key === 'Teszt_lista')[0];
-    expect(teszt.content).toEqual({ mode: 'items', source: 'items/Teszt_lista.json', itemCount: 2, includeAttachments: false });
+    expect(teszt.content).toEqual({ mode: 'items', source: 'items/Teszt_lista.json', itemCount: 2, includeAttachments: true });
     expect(reader.manifest.meta.includesContent).toBe(true);
     expect(reader.manifest.principals).toEqual([{ key: 'anna', kind: 'user', loginName: ANNA, email: 'anna@contoso.com', displayName: 'Kiss Anna' }]);
     const file = await reader.getJson<IItemsFile>('items/Teszt_lista.json');
@@ -120,7 +125,9 @@ describe('ItemExtractor', () => {
         contentType: SITE_CT,
         values: { Title: 'Első', CJNum: 12.5, CJDate: '2026-03-02T08:15:00Z', Valaki: { principals: ['{principal:anna}'] }, ListaLookup: { lookup: [2] } },
         // The system account is not carried: the installing user becomes the editor.
-        system: { author: '{principal:anna}', created: '2026-03-02T08:15:00Z', modified: '2026-07-16T11:30:00Z' }
+        system: { author: '{principal:anna}', created: '2026-03-02T08:15:00Z', modified: '2026-07-16T11:30:00Z' },
+        // ".." is not allowed in package paths: jelentes..v2.pdf is stored as jelentes.v2.pdf (with a warning).
+        attachments: ['attachments/Teszt_lista/1/Ékezetes név.txt', 'attachments/Teszt_lista/1/jelentes.v2.pdf']
       },
       {
         sourceId: 3,
@@ -130,6 +137,12 @@ describe('ItemExtractor', () => {
         system: { author: '{principal:anna}', editor: '{principal:anna}', created: '2026-01-15T10:00:00Z', modified: '2026-01-15T10:00:00Z' }
       }
     ]);
+  });
+
+  it('packs item attachments as package entries', async () => {
+    const reader = await extractPackage();
+    expect(await (await reader.getBlob('attachments/Teszt_lista/1/Ékezetes név.txt')).text()).toBe('"content of Ékezetes név.txt"');
+    expect(reader.has('attachments/Teszt_lista/1/jelentes.v2.pdf')).toBe(true);
   });
 
   it('reads large lists in ID-filtered pages', async () => {
@@ -221,6 +234,16 @@ function targetSp(
       l.items.push(item);
       return { body: { value: body.formValues.map((v) => ({ ...v, HasException: false })).concat([{ FieldName: 'Id', FieldValue: String(item.ID), HasException: false }]) } };
     }
+    // Attachments (spike 09 B): each file sets Editor/Modified to the installer; a repeated name is HTTP 400.
+    if (req.method === 'POST' && (m = /\/getList\('([^']+)'\)\/items\((\d+)\)\/AttachmentFiles\/add\(FileName='([^']+)'\)$/i.exec(req.url))) {
+      const item = list(m[1])!.items.filter((i) => i.ID === Number(m![2]))[0];
+      const files = (item.attachments = (item.attachments as string[]) || []) as string[];
+      if (files.indexOf(m[3]) >= 0) return { status: 400, body: { 'odata.error': { code: '-2130575257, Microsoft.SharePoint.SPException', message: { value: 'A megadott név már használatban van.' } } } };
+      files.push(m[3]);
+      item.Editor = 'installer';
+      item.Modified = 'now';
+      return { body: { FileName: m[3] } };
+    }
     if (req.method === 'POST' && (m = /\/getList\('([^']+)'\)\/items\((\d+)\)\/ValidateUpdateListItem(\(\))?$/i.exec(req.url))) {
       const item = list(m[1])!.items.filter((i) => i.ID === Number(m![2]))[0];
       const body = req.body as { formValues: Array<{ FieldName: string; FieldValue: string }> };
@@ -293,8 +316,13 @@ describe('ItemProvider + ItemLookupProvider', () => {
       ContentTypeId: TARGET_LIST_CT,
       Author: `[{"Key":"${ANNA}"}]`,
       Created: '2026. 03. 02. 9:15',
+      // Attachments from the package; afterwards Modified is sent again. The source editor was the system
+      // account (not carried), so Editor stays the installer.
+      attachments: ['Ékezetes név.txt', 'jelentes.v2.pdf'],
+      Editor: 'installer',
       Modified: '2026. 07. 16. 13:30'
     });
+    expect(inFolder.attachments).toBeUndefined();
     expect(inFolder.folder).toBe(`${T_TEST}/2026/Q1`);
     expect(inFolder.ContentTypeId).toBe(TARGET_ITEM_CT);
     expect(lists[T_TEST].folders).toEqual(['2026', '2026/Q1']);
