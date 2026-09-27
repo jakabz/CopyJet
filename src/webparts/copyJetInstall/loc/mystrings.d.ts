@@ -30,6 +30,10 @@ declare interface ICopyJetInstallWebPartStrings {
   FactContent: string;
   FactChecksum: string;
   NoChecksum: string;
+  ChecksumChecking: string;
+  ChecksumOk: string;
+  ChecksumMismatch: string;
+  ChecksumMismatchNote: string;
   ContentSummary: string;
   Warning: string;
   TenantDiffers: string;

@@ -2,6 +2,7 @@ import JSZip from 'jszip';
 import { CopyJetError, throwIfAborted } from '../errors';
 import type { ICopyJetTemplate, ITemplateReader, ITemplateWriter } from '../model';
 import { validate, validateTemplate, type SchemaTarget } from '../schema';
+import { manifestChecksumBytes, packageChecksum } from './checksum';
 
 export const MANIFEST_ENTRY = 'manifest.json';
 
@@ -56,12 +57,19 @@ export class ZipTemplateWriter implements ITemplateWriter {
     if (!result.valid) {
       throw new CopyJetError('TEMPLATE_INVALID', 'The template does not match the schema.', result.errors);
     }
+    const entries: { [path: string]: Uint8Array } = {};
+    Object.keys(this._json).forEach((path) => (entries[path] = new TextEncoder().encode(JSON.stringify(validated(path, this._json[path])))));
+    for (const path of Object.keys(this._blobs)) {
+      throwIfAborted(signal);
+      entries[path] = new Uint8Array(await this._blobs[path].arrayBuffer());
+    }
+    const paths = Object.keys(entries);
+    delete this.manifest.meta.checksum;
+    this.manifest.meta.estimatedSizeBytes = paths.reduce((n, p) => n + entries[p].length, manifestChecksumBytes(this.manifest).length);
+    this.manifest.meta.checksum = await packageChecksum(this.manifest, paths.map((path) => ({ path, bytes: async () => entries[path] })), signal);
     const zip = new JSZip();
     zip.file(MANIFEST_ENTRY, JSON.stringify(this.manifest, null, 2));
-    Object.keys(this._json).forEach((path) => zip.file(path, JSON.stringify(validated(path, this._json[path]))));
-    for (const path of Object.keys(this._blobs)) {
-      zip.file(path, new Uint8Array(await this._blobs[path].arrayBuffer()));
-    }
+    paths.forEach((path) => zip.file(path, entries[path]));
     throwIfAborted(signal);
     // uint8array rather than blob: JSZip's blob output needs browser detection that fails under Node (tests).
     const bytes = await zip.generateAsync({ type: 'uint8array', compression: 'DEFLATE', compressionOptions: { level: 6 } });
@@ -72,12 +80,18 @@ export class ZipTemplateWriter implements ITemplateWriter {
 
 class ZipTemplateReader implements ITemplateReader {
   public readonly manifest: ICopyJetTemplate;
+  public readonly storedManifest: ICopyJetTemplate;
   private readonly _zip: JSZip;
   private readonly _cache: { [path: string]: unknown } = {};
 
-  constructor(manifest: ICopyJetTemplate, zip: JSZip) {
+  constructor(manifest: ICopyJetTemplate, stored: ICopyJetTemplate, zip: JSZip) {
     this.manifest = manifest;
+    this.storedManifest = stored;
     this._zip = zip;
+  }
+
+  public entries(): string[] {
+    return Object.keys(this._zip.files).filter((path) => !this._zip.files[path].dir && path !== MANIFEST_ENTRY);
   }
 
   public has(path: string): boolean {
@@ -113,7 +127,10 @@ class ZipTemplateReader implements ITemplateReader {
 }
 
 /** Reads a .zip package: its manifest.json (returned for migration and validation) and the reader over it. */
-export async function loadZipPackage(file: Blob, signal?: AbortSignal): Promise<{ manifest: unknown; open: (manifest: ICopyJetTemplate) => ITemplateReader }> {
+export async function loadZipPackage(
+  file: Blob,
+  signal?: AbortSignal
+): Promise<{ manifest: unknown; open: (manifest: ICopyJetTemplate, stored: ICopyJetTemplate) => ITemplateReader }> {
   let zip: JSZip;
   try {
     zip = await JSZip.loadAsync(new Uint8Array(await file.arrayBuffer()));
@@ -131,5 +148,5 @@ export async function loadZipPackage(file: Blob, signal?: AbortSignal): Promise<
   } catch (e) {
     throw new CopyJetError('TEMPLATE_PARSE', 'manifest.json is not valid JSON.', e instanceof Error ? e.message : e);
   }
-  return { manifest, open: (m) => new ZipTemplateReader(m, zip) };
+  return { manifest, open: (m, stored) => new ZipTemplateReader(m, stored, zip) };
 }

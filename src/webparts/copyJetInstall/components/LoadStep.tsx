@@ -5,7 +5,7 @@ import * as strings from 'CopyJetInstallWebPartStrings';
 import { missingInstallPermissions } from '../../../core/engine';
 import { CopyJetError } from '../../../core/errors';
 import type { ITemplateReader } from '../../../core/model';
-import { openTemplate, openTemplateFromUrl } from '../../../core/packager';
+import { openTemplate, openTemplateFromUrl, verifyChecksum, type ChecksumStatus } from '../../../core/packager';
 import { formatIssues, type IValidationIssue } from '../../../core/schema';
 import { Button, Message, Tag, ui } from '../../../shared/components/ui';
 import { format } from './labels';
@@ -47,6 +47,22 @@ export const LoadStep: React.FC<ILoadStepProps> = ({ sp, targetUrl, reader, file
   const [dragging, setDragging] = React.useState(false);
   const [url, setUrl] = React.useState('');
   const input = React.useRef<HTMLInputElement>(null);
+  const [checksum, setChecksum] = React.useState<ChecksumStatus | 'checking' | undefined>(undefined);
+
+  // The package is checked against its SHA-256 once loaded; a mismatch warns but does not block (rendszerterv §9).
+  React.useEffect(() => {
+    if (!reader) {
+      setChecksum(undefined);
+      return;
+    }
+    const ac = new AbortController();
+    setChecksum('checking');
+    verifyChecksum(reader, ac.signal).then(
+      (status) => !ac.signal.aborted && setChecksum(status),
+      () => !ac.signal.aborted && setChecksum('mismatch')
+    );
+    return () => ac.abort();
+  }, [reader]);
 
   React.useEffect(() => {
     let live = true;
@@ -170,8 +186,14 @@ export const LoadStep: React.FC<ILoadStepProps> = ({ sp, targetUrl, reader, file
               {t.meta.includesContent && items ? format(strings.ContentItems, items) : ''}
               {t.meta.includesContent && files ? format(strings.ContentFiles, files, Math.max(1, Math.round(bytes / 1048576))) : ''}
             </span>
-            <span>{t.meta.checksum ? t.meta.checksum.slice(0, 18) + '…' : strings.NoChecksum}</span>
+            <span style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+              {t.meta.checksum ? t.meta.checksum.slice(0, 18) + '…' : strings.NoChecksum}
+              {checksum === 'checking' && <span className={ui.muted}>{strings.ChecksumChecking}</span>}
+              {checksum === 'ok' && <Tag kind="new">{strings.ChecksumOk}</Tag>}
+              {checksum === 'mismatch' && <Tag kind="err">{strings.ChecksumMismatch}</Tag>}
+            </span>
           </div>
+          {checksum === 'mismatch' && <Message kind="warning">{strings.ChecksumMismatchNote}</Message>}
           {warnings.map((w) => (
             <div key={w} style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 13 }}>
               <Tag kind="diff">{strings.Warning}</Tag>

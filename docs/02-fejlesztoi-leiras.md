@@ -333,7 +333,7 @@ sablon.zip
 ```
 
 - `TemplateWriter.addJson(path, obj)` / `addBlob(path, blob)` / `finalize(): Promise<Blob>` – JSZip, `compression: 'DEFLATE'` szöveges fájlokra, `STORE` már tömörített formátumokra (docx, pdf, jpg).
-- `finalize` során SHA-256 ellenőrzőösszeg számítása (`crypto.subtle.digest`) a `meta.checksum`-ba.
+- `finalize` során SHA-256 ellenőrzőösszeg (`crypto.subtle.digest`) a `meta.checksum`-ba (`packager/checksum.ts`). Bejegyzésenként számol, mert a Web Crypto nem streamel: minden bejegyzés (a manifest `checksum` nélkül, tömör JSON-ként) saját hash-t kap, a végső összeg az útvonal szerint rendezett „útvonal + hash” sorokból készül. Az Install a migrálás előtti manifesttel ellenőriz (`verifyChecksum`).
 - `TemplateReader.open(file)` – `.json` vagy `.zip` felismerése, manifest validálása, a többi bejegyzés lusta betöltése (`getBlob(path)` csak akkor, amikor a provider kéri).
 - Memória: fájlonkénti blobok, nem egyetlen nagy ArrayBuffer; 1 GB feletti becsült méretnél a Setup figyelmeztet.
 - Mentés: böngészős letöltés (`URL.createObjectURL`) és/vagy feltöltés a `CopyJetTemplates` tárba a `http.uploadFile`-lal.
@@ -438,7 +438,7 @@ A fejlesztés a rendszerterv fázisait követi; minden fázis végén működő,
 - [x] `FieldValueSerializer` minden támogatott mezőtípusra (Text, Note, Number/Currency/Integer, Boolean, Choice, MultiChoice, DateTime, URL, User/UserMulti, Lookup/LookupMulti; Managed Metadata a `TermMapper`-rel, Image a fájlokkal jön, addig figyelmeztetés) – `docs/spikes/08`
 - [x] `ItemExtractor` / `ItemProvider`, mellékletek, `IdMap`, lookup második kör (`ItemLookupProvider`), `PrincipalMapper` alap (azonos login → azonos e-mail); felület: Setup listánként „Szerkezet + tartalom”, szerzők megőrzése, automatikus `.zip`, lookup-céllisták tartalmának felajánlása; Install `.zip` betöltés, felhasználó-keresés a Leképezés lépésben – valódi Forrás → Cél telepítéssel igazolva 2026-09-25-én (`docs/spikes/08`, `09`)
 - [x] `FileExtractor` / `FileProvider`, chunked upload, opcionális verziók (`docs/spikes/10`; felület: tárak „Szerkezet + tartalom”, verziókapcsoló, max. fájlméret) – valódi telepítéssel ellenőrizendő; a hivatkozásos mód (`createCopyJobs`) a 4. fázisban
-- [ ] `packager` – `.zip`, checksum – kész: `.zip` írás/olvasás (`ZipTemplateWriter`, bejegyzések sémavalidálása, útvonal-ellenőrzés); hátra van: checksum
+- [x] `packager` – `.zip`, checksum (`ZipTemplateWriter`, bejegyzések sémavalidálása, útvonal-ellenőrzés; `meta.checksum` = SHA-256 bejegyzésenként, útvonal szerint rendezett listából, a manifest a `checksum` nélkül; `meta.estimatedSizeBytes`; az Install betöltéskor ellenőrzi, eltérésnél figyelmeztet)
 - [ ] `mapping`: `PrincipalMapper`, `TermMapper`, Install `MappingStep`
 
 **3. fázis – Lapok és navigáció**

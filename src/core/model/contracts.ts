@@ -20,6 +20,10 @@ export interface ITemplateWriter {
 /** Read access to a loaded template package; entries are loaded lazily. */
 export interface ITemplateReader {
   readonly manifest: ICopyJetTemplate;
+  /** The manifest as stored in the file, before migration (what meta.checksum was computed over). */
+  readonly storedManifest: ICopyJetTemplate;
+  /** Paths of the package entries besides manifest.json (none for a .json template). */
+  entries(): string[];
   has(path: string): boolean;
   getJson<T>(path: string, signal?: AbortSignal): Promise<T>;
   getBlob(path: string, signal?: AbortSignal): Promise<Blob>;

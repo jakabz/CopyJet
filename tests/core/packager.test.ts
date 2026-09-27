@@ -1,7 +1,7 @@
 import { readFileSync } from 'fs';
 import { join } from 'path';
 import JSZip from 'jszip';
-import { JsonTemplateWriter, ZipTemplateWriter, checkEntryPath, createEmptyTemplate, openTemplate } from '../../src/core/packager';
+import { JsonTemplateWriter, ZipTemplateWriter, checkEntryPath, createEmptyTemplate, openTemplate, verifyChecksum } from '../../src/core/packager';
 import { CopyJetError, AbortError } from '../../src/core/errors';
 
 const exampleText = readFileSync(join(__dirname, '..', '..', 'schema', 'examples', 'manifest.example.json'), 'utf8');
@@ -112,5 +112,58 @@ describe('ZipTemplateWriter', () => {
     const zip = await JSZip.loadAsync(new Uint8Array(await (await writer.finalize()).arrayBuffer()));
     zip.remove('items/Projektek.json');
     await expect(openTemplate(new Blob([await zip.generateAsync({ type: 'uint8array' })]))).rejects.toMatchObject({ code: 'TEMPLATE_CONTENT_MISSING' });
+  });
+});
+
+describe('checksum', () => {
+  const withItems = (): ZipTemplateWriter => {
+    const writer = new ZipTemplateWriter(createEmptyTemplate({ ...meta, includesContent: true }));
+    writer.manifest.lists.push({ key: 'Projektek', url: 'Lists/Projektek', title: 'Projektek', template: 100, content: { mode: 'items', source: 'items/Projektek.json', itemCount: 2 } });
+    writer.addJson('items/Projektek.json', exampleItems);
+    writer.addBlob('attachments/Projektek/1/specifikacio.pdf', new Blob([new Uint8Array([1, 2, 3])]));
+    return writer;
+  };
+  const rezip = async (blob: Blob, change: (zip: JSZip) => Promise<void>): Promise<Blob> => {
+    const zip = await JSZip.loadAsync(new Uint8Array(await blob.arrayBuffer()));
+    await change(zip);
+    return new Blob([await zip.generateAsync({ type: 'uint8array' })]);
+  };
+
+  it('stamps a .zip with sha256 and its size, and verifies it after loading', async () => {
+    const blob = await withItems().finalize();
+    const reader = await openTemplate(blob);
+    expect(reader.manifest.meta.checksum).toMatch(/^sha256:[0-9a-f]{64}$/);
+    expect(reader.manifest.meta.estimatedSizeBytes).toBeGreaterThan(3);
+    expect(reader.entries().sort()).toEqual(['attachments/Projektek/1/specifikacio.pdf', 'items/Projektek.json']);
+    expect(await verifyChecksum(reader)).toBe('ok');
+  });
+
+  it('notices a changed entry or a changed manifest', async () => {
+    const blob = await withItems().finalize();
+    const entryChanged = await rezip(blob, async (zip) => void zip.file('attachments/Projektek/1/specifikacio.pdf', new Uint8Array([9, 9, 9])));
+    expect(await verifyChecksum(await openTemplate(entryChanged))).toBe('mismatch');
+    const manifestChanged = await rezip(blob, async (zip) => {
+      const m = JSON.parse(await zip.file('manifest.json')!.async('string'));
+      m.meta.name = 'Átírt név';
+      zip.file('manifest.json', JSON.stringify(m, null, 2));
+    });
+    expect(await verifyChecksum(await openTemplate(manifestChanged))).toBe('mismatch');
+    // Re-indenting the manifest is not a change: the checksum is over its content, not its layout.
+    const reformatted = await rezip(blob, async (zip) => void zip.file('manifest.json', JSON.stringify(JSON.parse(await zip.file('manifest.json')!.async('string')))));
+    expect(await verifyChecksum(await openTemplate(reformatted))).toBe('ok');
+  });
+
+  it('covers .json templates too, and reports a template without one', async () => {
+    const writer = new JsonTemplateWriter(createEmptyTemplate(meta));
+    const reader = await openTemplate(await writer.finalize());
+    expect(await verifyChecksum(reader)).toBe('ok');
+    const edited = { ...JSON.parse(await (await writer.finalize()).text()) };
+    edited.meta = { ...edited.meta, description: 'kézzel' };
+    expect(await verifyChecksum(await openTemplate(new Blob([JSON.stringify(edited)])))).toBe('mismatch');
+    // The example manifest carries a made-up checksum: it does not match; without one it is 'missing'.
+    expect(await verifyChecksum(await openTemplate(new Blob([structureOnly()])))).toBe('mismatch');
+    const bare = JSON.parse(structureOnly());
+    delete bare.meta.checksum;
+    expect(await verifyChecksum(await openTemplate(new Blob([JSON.stringify(bare)])))).toBe('missing');
   });
 });
