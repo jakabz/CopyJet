@@ -154,3 +154,7 @@ Létrehozza a `CopyJetSpike09` listát (verziózott, mellékletek bekapcsolva), 
 - **Ismert korlát:** egy N mellékletes elem verzióelőzményében N+1 plusz verzió jelenik meg a telepítő nevén. A lista nézetében a Módosította és a Módosítva a forrás szerinti. Verzió nélküli felülírás CSOM `UpdateOverwriteVersion`-nel lehetséges, ez egy későbbi fejlesztés.
 
 Állapot: **lezárva**.
+
+### Valódi telepítés (2026-09-27, 1.3.4.0)
+
+Forrás → Cél, mindkét lista szerkezettel és tartalommal: 7 / 7 és 4 / 4 elem, „Attachments added: 2”, lookupok 4 / 4, figyelmeztetés nélkül. A mellékletek a Célon megnyílnak, a kép rendben megjelenik.
