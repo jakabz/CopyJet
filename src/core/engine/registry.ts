@@ -1,4 +1,5 @@
 import { ContentTypeExtractor } from '../extractors/ContentTypeExtractor';
+import { FileExtractor } from '../extractors/FileExtractor';
 import { GroupExtractor } from '../extractors/GroupExtractor';
 import { ItemExtractor } from '../extractors/ItemExtractor';
 import { ListExtractor } from '../extractors/ListExtractor';
@@ -8,6 +9,7 @@ import { ViewExtractor } from '../extractors/ViewExtractor';
 import type { FetchLike } from '../http/raw';
 import type { IExtractor } from '../model';
 import { ContentTypeProvider } from '../providers/ContentTypeProvider';
+import { FileProvider } from '../providers/FileProvider';
 import { GroupProvider } from '../providers/GroupProvider';
 import { ItemLookupProvider } from '../providers/ItemLookupProvider';
 import { ItemProvider, type IItemProviderOptions } from '../providers/ItemProvider';
@@ -30,13 +32,14 @@ export function createProviders(fetchImpl?: FetchLike, items?: IItemProviderOpti
     listField: new ListFieldProvider(),
     view: new ViewProvider(),
     items: new ItemProvider(items),
-    itemLookups: new ItemLookupProvider(items)
+    itemLookups: new ItemLookupProvider(items),
+    files: new FileProvider()
   } as ProviderMap;
 }
 
 /**
- * Extractors in the order the Setup runs them: lists before list columns, views and items, which write into
- * the template's list entries.
+ * Extractors in the order the Setup runs them: lists before list columns, views, items and files, which
+ * write into the template's list entries.
  */
 export function createExtractors(): Array<IExtractor<unknown>> {
   return [
@@ -46,6 +49,7 @@ export function createExtractors(): Array<IExtractor<unknown>> {
     new ListExtractor(),
     new ListFieldExtractor(),
     new ViewExtractor(),
-    new ItemExtractor()
+    new ItemExtractor(),
+    new FileExtractor()
   ] as Array<IExtractor<unknown>>;
 }

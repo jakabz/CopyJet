@@ -31,6 +31,10 @@ export interface IExtractOptions {
   includeMembers: boolean;
   /** Items keep their author, editor and dates (default true). */
   preserveAuthors?: boolean;
+  /** Libraries (template keys) whose earlier file versions are copied too (default: none). */
+  versionsFor?: string[];
+  /** Files larger than this stay out of the package, with a warning (default 250 MB). */
+  maxFileBytes?: number;
   /** Source-site values to tokenize (site URLs, list GUIDs → {listkey:X} ...). */
   tokens: TokenContext;
   log: Logger;

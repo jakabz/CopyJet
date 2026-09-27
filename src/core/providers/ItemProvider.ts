@@ -20,10 +20,10 @@ import {
   readWebLocale,
   runItemWrites,
   toTargetValue,
+  warnMissingFields,
   webLocalTime,
   type IFormValue,
   type IListItemsDef,
-  type ITargetField,
   type TemplateItem
 } from '../items';
 import { formatSpDateTime, type IWebLocale } from '../items/locale';
@@ -119,7 +119,7 @@ export class ItemProvider implements IProvider<IListItemsDef> {
     ctx.log.info(`The target list has no items; writing ${file.items.length}.`, { artifact: ref, code: 'ITEMS_TARGET_EMPTY' });
     const listUrl = itemsListUrl(def, ctx);
     const fields = await readTargetFields(sp, listUrl, def.listKey, ctx.tokens);
-    this._warnMissingFields(file.items, fields, ref, ctx);
+    warnMissingFields(file.items, fields, ref, ctx);
 
     const locale = await readWebLocale(sp);
     const times = webLocalTime(sp);
@@ -215,15 +215,6 @@ export class ItemProvider implements IProvider<IListItemsDef> {
       ctx.log.warn(`Attachments of item ${f.sourceId} could not all be added: ${f.errors.join('; ')}`, { artifact: ref, code: 'ATTACHMENT_FAILED', detail: f })
     );
     ctx.log.info(`Attachments added: ${added}.`, { artifact: ref });
-  }
-
-  /** Values of columns the target list lacks would fail the whole item (spike 08 C): dropped with one warning each. */
-  private _warnMissingFields(items: TemplateItem[], fields: { [name: string]: ITargetField }, ref: IArtifactRef, ctx: IInstallContext): void {
-    const missing: { [name: string]: boolean } = {};
-    items.forEach((item) => Object.keys(item.values).forEach((name) => !fields[name] && (missing[name] = true)));
-    Object.keys(missing).forEach((name) =>
-      ctx.log.warn(`Column ${name} is not a writable column of the target list; its values are skipped.`, { artifact: ref, code: 'ITEM_FIELD_MISSING', detail: name })
-    );
   }
 
   /** Item folders missing on the target, parents first: an item in a missing folder fails with HTTP 500 (spike 08 E). */

@@ -93,6 +93,8 @@ export const LoadStep: React.FC<ILoadStepProps> = ({ sp, targetUrl, reader, file
   const listFields = t ? t.lists.reduce((n, l) => n + (l.fields || []).length, 0) + t.siteFields.length : 0;
   const views = t ? t.lists.reduce((n, l) => n + (l.views || []).length, 0) : 0;
   const items = t ? t.lists.reduce((n, l) => n + (l.content && l.content.mode === 'items' ? l.content.itemCount || 0 : 0), 0) : 0;
+  const files = t ? t.lists.reduce((n, l) => n + (l.content && l.content.mode === 'files' ? l.content.fileCount || 0 : 0), 0) : 0;
+  const bytes = t ? t.lists.reduce((n, l) => n + (l.content && l.content.mode === 'files' ? l.content.sizeBytes || 0 : 0), 0) : 0;
   const warnings: string[] = t
     ? (host(t.meta.sourceSiteUrl) !== host(targetUrl) && (t.principals.length > 0 || (t.terms || []).length > 0) ? [strings.TenantDiffers] : []).concat(
         (t.meta.warnings || []).map((w) => w.message)
@@ -165,7 +167,8 @@ export const LoadStep: React.FC<ILoadStepProps> = ({ sp, targetUrl, reader, file
             <span>{t.schemaVersion}</span>
             <span>
               {format(strings.ContentSummary, t.lists.length, listFields, views)}
-              {t.meta.includesContent ? format(strings.ContentItems, items) : ''}
+              {t.meta.includesContent && items ? format(strings.ContentItems, items) : ''}
+              {t.meta.includesContent && files ? format(strings.ContentFiles, files, Math.max(1, Math.round(bytes / 1048576))) : ''}
             </span>
             <span>{t.meta.checksum ? t.meta.checksum.slice(0, 18) + '…' : strings.NoChecksum}</span>
           </div>

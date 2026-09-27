@@ -9,7 +9,7 @@ import { ExportStep, type ExportStatus } from './ExportStep';
 import { OptionsStep } from './OptionsStep';
 import { SelectStep } from './SelectStep';
 import { SummaryStep } from './SummaryStep';
-import { contentRefs, format, selectedArtifacts, selectedRefs } from './selection';
+import { contentRefs, format, isLibrary, selectedArtifacts, selectedRefs } from './selection';
 import type { ICopyJetSetupProps } from './ICopyJetSetupProps';
 
 export function kindLabel(kind: ArtifactKind): string {
@@ -21,6 +21,7 @@ export function kindLabel(kind: ArtifactKind): string {
     listField: strings.KindListField,
     view: strings.KindView,
     items: strings.KindItems,
+    files: strings.KindFiles,
     itemLookups: strings.KindItemLookups
   };
   return labels[kind] || kind;
@@ -45,6 +46,9 @@ interface ISetupState {
   /** List keys copied with their items (off by default). */
   content: string[];
   preserveAuthors: boolean;
+  /** Library keys whose earlier file versions are copied (off by default). */
+  versions: string[];
+  maxFileMb: number;
   /** Remounts the export step for a new extraction. */
   runId: number;
   exportStatus?: ExportStatus;
@@ -59,6 +63,8 @@ type Action =
   | { type: 'description'; description: string }
   | { type: 'content'; key: string; on: boolean }
   | { type: 'preserveAuthors'; on: boolean }
+  | { type: 'versions'; key: string; on: boolean }
+  | { type: 'maxFileMb'; mb: number }
   | { type: 'export' }
   | { type: 'exportStatus'; status: ExportStatus }
   | { type: 'addMissing'; keys: string[] }
@@ -82,6 +88,10 @@ function reducer(state: ISetupState, action: Action): ISetupState {
       return { ...state, content: state.content.filter((k) => k !== action.key).concat(action.on ? [action.key] : []) };
     case 'preserveAuthors':
       return { ...state, preserveAuthors: action.on };
+    case 'versions':
+      return { ...state, versions: state.versions.filter((k) => k !== action.key).concat(action.on ? [action.key] : []) };
+    case 'maxFileMb':
+      return { ...state, maxFileMb: action.mb };
     case 'export':
       return { ...state, step: 3, runId: state.runId + 1, exportStatus: 'running' };
     case 'exportStatus':
@@ -89,7 +99,7 @@ function reducer(state: ISetupState, action: Action): ISetupState {
     case 'addMissing':
       return { ...state, selected: state.selected.concat(action.keys.filter((k) => state.selected.indexOf(k) < 0)) };
     case 'reset':
-      return { ...state, step: 0, selected: [], content: [], exportStatus: undefined };
+      return { ...state, step: 0, selected: [], content: [], versions: [], exportStatus: undefined };
     default:
       return state;
   }
@@ -97,7 +107,7 @@ function reducer(state: ISetupState, action: Action): ISetupState {
 
 /** Setup wizard as in docs/ui (setup-1 … setup-4): structure into a .json template, with list items into a .zip. */
 const CopyJetSetup: React.FC<ICopyJetSetupProps> = ({ sp, siteTitle, createdBy }) => {
-  const [state, dispatch] = React.useReducer(reducer, { step: 0, selected: [], name: '', description: '', content: [], preserveAuthors: true, runId: 0 });
+  const [state, dispatch] = React.useReducer(reducer, { step: 0, selected: [], name: '', description: '', content: [], preserveAuthors: true, versions: [], maxFileMb: 250, runId: 0 });
   const stopRef = React.useRef<(() => void) | undefined>(undefined);
 
   React.useEffect(() => {
@@ -111,8 +121,12 @@ const CopyJetSetup: React.FC<ICopyJetSetupProps> = ({ sp, siteTitle, createdBy }
 
   const artifacts = state.discovery ? state.discovery.artifacts : [];
   const structure = selectedRefs(artifacts, state.selected);
-  const refs = structure.concat(contentRefs(state.content, state.selected));
+  const refs = structure.concat(contentRefs(state.content, state.selected, artifacts));
   const contentLists = selectedArtifacts(artifacts, state.selected).filter((a) => state.content.indexOf(a.ref.key) >= 0);
+  const contentItems = contentLists.filter((a) => !isLibrary(a));
+  const contentFiles = contentLists.filter(isLibrary);
+  // Versions only for libraries still copied with content; the core wants template keys.
+  const versionsFor = state.versions.filter((k) => contentFiles.some((a) => a.ref.key === k)).map((k) => k.replace(/^list:/, ''));
   const steps = [strings.StepSelect, strings.StepOptions, strings.StepSummary, strings.StepExport];
   const subtitles = [strings.SubtitleSelect, strings.SubtitleOptions, strings.SubtitleSummary, strings.SubtitleExport];
   const go = (step: number): void => dispatch({ type: 'step', step });
@@ -146,6 +160,10 @@ const CopyJetSetup: React.FC<ICopyJetSetupProps> = ({ sp, siteTitle, createdBy }
         onContent={(key, on) => dispatch({ type: 'content', key, on })}
         preserveAuthors={state.preserveAuthors}
         onPreserveAuthors={(on) => dispatch({ type: 'preserveAuthors', on })}
+        versions={state.versions}
+        onVersions={(key, on) => dispatch({ type: 'versions', key, on })}
+        maxFileMb={state.maxFileMb}
+        onMaxFileMb={(mb) => dispatch({ type: 'maxFileMb', mb })}
       />
     );
     footerEnd = (
@@ -163,7 +181,14 @@ const CopyJetSetup: React.FC<ICopyJetSetupProps> = ({ sp, siteTitle, createdBy }
         name={state.name}
         createdBy={createdBy}
         kindLabel={kindLabel}
-        content={{ lists: contentLists.length, items: contentLists.reduce((n, a) => n + (a.itemCount || 0), 0), personal: contentLists.length > 0 && state.preserveAuthors }}
+        content={{
+          lists: contentItems.length,
+          items: contentItems.reduce((n, a) => n + (a.itemCount || 0), 0),
+          libraries: contentFiles.length,
+          files: contentFiles.reduce((n, a) => n + (a.itemCount || 0), 0),
+          withVersions: versionsFor.length,
+          personal: contentLists.length > 0 && state.preserveAuthors
+        }}
         contentKeys={state.content}
         onAddContent={(keys) => keys.forEach((key) => dispatch({ type: 'content', key, on: true }))}
         onAddMissing={(keys) => dispatch({ type: 'addMissing', keys })}
@@ -186,6 +211,8 @@ const CopyJetSetup: React.FC<ICopyJetSetupProps> = ({ sp, siteTitle, createdBy }
         description={state.description}
         createdBy={createdBy}
         preserveAuthors={state.preserveAuthors}
+        versionsFor={versionsFor}
+        maxFileBytes={state.maxFileMb * 1024 * 1024}
         kindLabel={kindLabel}
         logLabels={LOG_LABELS}
         onStatus={(status, stop) => {

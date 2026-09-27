@@ -135,6 +135,9 @@ describe('list field origin (spike 05)', () => {
       'SiteColumn1',
       'StartDate'
     ]);
+    // SharePoint's automatic image tags column is never copied (spike 10 A).
+    const imageTags = { ...tesztListaFields[0], InternalName: 'MediaServiceImageTags', TypeAsString: 'TaxonomyFieldTypeMulti', FromBaseType: false, CanBeDeleted: true };
+    expect(isCopiedListField(imageTags, tesztLista.Id)).toBe(false);
   });
 });
 

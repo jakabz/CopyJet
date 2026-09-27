@@ -3,7 +3,7 @@ import { Icon } from '@fluentui/react';
 import * as strings from 'CopyJetSetupWebPartStrings';
 import type { IDiscoveredArtifact } from '../../../core/model';
 import { ui } from '../../../shared/components/ui';
-import { canCopyItems, categoryOf } from './selection';
+import { canCopyContent, categoryOf, isLibrary } from './selection';
 import styles from './CopyJetSetup.module.scss';
 
 export interface IOptionsStepProps {
@@ -18,7 +18,15 @@ export interface IOptionsStepProps {
   onContent: (key: string, on: boolean) => void;
   preserveAuthors: boolean;
   onPreserveAuthors: (on: boolean) => void;
+  /** Library keys whose earlier file versions are copied. */
+  versions: string[];
+  onVersions: (key: string, on: boolean) => void;
+  maxFileMb: number;
+  onMaxFileMb: (mb: number) => void;
 }
+
+/** Choices of the "Max. fájlméret" setting (MB). */
+export const MAX_FILE_SIZES = [50, 100, 250, 500, 1024];
 
 function typeLabel(a: IDiscoveredArtifact): string {
   switch (categoryOf(a)) {
@@ -35,13 +43,16 @@ const Phase2: React.FC = () => <span className={ui.muted}> {strings.Phase2}</spa
 
 /**
  * Step 2 (docs/ui setup-2): per-item copy options with a side panel, global settings. Lists can carry their
- * items; library files, versions and group members follow later in phase 2 and are shown switched off.
+ * items, libraries their files (optionally with earlier versions); group members and the folder filter follow
+ * later in phase 2 and are shown switched off.
  */
-export const OptionsStep: React.FC<IOptionsStepProps> = ({ items, name, description, onName, onDescription, content, onContent, preserveAuthors, onPreserveAuthors }) => {
+export const OptionsStep: React.FC<IOptionsStepProps> = ({ items, name, description, onName, onDescription, content, onContent, preserveAuthors, onPreserveAuthors, versions, onVersions, maxFileMb, onMaxFileMb }) => {
   const [open, setOpen] = React.useState<string | undefined>(undefined);
   const current = items.filter((i) => i.ref.key === open)[0];
   const withContent = (key: string): boolean => content.indexOf(key) >= 0;
   const hasContent = items.some((i) => withContent(i.ref.key));
+  const hasFiles = items.some((i) => isLibrary(i) && withContent(i.ref.key));
+  const withVersions = (key: string): boolean => versions.indexOf(key) >= 0;
 
   return (
     <div className={ui.split}>
@@ -71,7 +82,7 @@ export const OptionsStep: React.FC<IOptionsStepProps> = ({ items, name, descript
                     <td className={ui.strong}>{i.title}</td>
                     <td className={ui.muted}>{typeLabel(i)}</td>
                     <td>{group ? strings.CopyGroup : withContent(i.ref.key) ? strings.CopyStructureContent : strings.CopyStructure}</td>
-                    <td className={ui.muted}>{group ? strings.MembersOff : categoryOf(i) === 'libraries' ? strings.Off : strings.Dash}</td>
+                    <td className={ui.muted}>{group ? strings.MembersOff : isLibrary(i) ? (withContent(i.ref.key) && withVersions(i.ref.key) ? strings.On : strings.Off) : strings.Dash}</td>
                   </tr>
                 );
               })}
@@ -100,10 +111,13 @@ export const OptionsStep: React.FC<IOptionsStepProps> = ({ items, name, descript
             </span>
             <span>
               <label htmlFor="cj-maxsize">{strings.MaxFileSize}</label>{' '}
-              <select id="cj-maxsize" className={ui.select} disabled>
-                <option>250 MB</option>
+              <select id="cj-maxsize" className={ui.select} value={maxFileMb} disabled={!hasFiles} onChange={(e) => onMaxFileMb(Number(e.target.value))}>
+                {MAX_FILE_SIZES.map((mb) => (
+                  <option key={mb} value={mb}>
+                    {mb >= 1024 ? `${mb / 1024} GB` : `${mb} MB`}
+                  </option>
+                ))}
               </select>
-              <Phase2 />
             </span>
             <span>
               <label htmlFor="cj-format">{strings.FormatLabel}</label>{' '}
@@ -152,12 +166,12 @@ export const OptionsStep: React.FC<IOptionsStepProps> = ({ items, name, descript
                       name="cj-mode"
                       id="cj-m2"
                       checked={withContent(current.ref.key)}
-                      disabled={!canCopyItems(current)}
+                      disabled={!canCopyContent(current)}
                       onChange={() => onContent(current.ref.key, true)}
                       className={ui.check}
                     />{' '}
                     <label htmlFor="cj-m2">{strings.CopyStructureContent}</label>
-                    {!canCopyItems(current) && <Phase2 />}
+                    {!canCopyContent(current) && <Phase2 />}
                   </span>
                 </fieldset>
                 <div className={ui.field}>
@@ -167,8 +181,15 @@ export const OptionsStep: React.FC<IOptionsStepProps> = ({ items, name, descript
                   <input id="cj-folder" className={ui.input} type="text" placeholder={strings.FolderFilterPlaceholder} disabled />
                 </div>
                 <span>
-                  <input className={ui.check} type="checkbox" id="cj-versions" disabled /> <label htmlFor="cj-versions">{strings.CopyVersions}</label>
-                  <Phase2 />
+                  <input
+                    className={ui.check}
+                    type="checkbox"
+                    id="cj-versions"
+                    checked={withVersions(current.ref.key)}
+                    disabled={!isLibrary(current) || !withContent(current.ref.key)}
+                    onChange={(e) => onVersions(current.ref.key, e.target.checked)}
+                  />{' '}
+                  <label htmlFor="cj-versions">{strings.CopyVersions}</label>
                 </span>
                 <span className={ui.muted} style={{ fontSize: 13 }}>
                   {strings.VersionsNote}
