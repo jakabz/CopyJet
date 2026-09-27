@@ -23,8 +23,8 @@ export interface ILoadStepProps {
 function loadError(e: unknown, fromUrl: boolean): string {
   if (e instanceof CopyJetError) {
     switch (e.code) {
-      case 'TEMPLATE_ZIP_UNSUPPORTED':
-        return strings.ZipLater;
+      case 'TEMPLATE_CONTENT_MISSING':
+        return strings.ContentMissing;
       case 'TEMPLATE_PARSE':
         return strings.ParseError;
       case 'TEMPLATE_INVALID':
@@ -92,6 +92,7 @@ export const LoadStep: React.FC<ILoadStepProps> = ({ sp, targetUrl, reader, file
   const t = reader && reader.manifest;
   const listFields = t ? t.lists.reduce((n, l) => n + (l.fields || []).length, 0) + t.siteFields.length : 0;
   const views = t ? t.lists.reduce((n, l) => n + (l.views || []).length, 0) : 0;
+  const items = t ? t.lists.reduce((n, l) => n + (l.content && l.content.mode === 'items' ? l.content.itemCount || 0 : 0), 0) : 0;
   const warnings: string[] = t
     ? (host(t.meta.sourceSiteUrl) !== host(targetUrl) && (t.principals.length > 0 || (t.terms || []).length > 0) ? [strings.TenantDiffers] : []).concat(
         (t.meta.warnings || []).map((w) => w.message)
@@ -126,7 +127,7 @@ export const LoadStep: React.FC<ILoadStepProps> = ({ sp, targetUrl, reader, file
           <input
             ref={input}
             type="file"
-            accept=".json,.zip,application/json"
+            accept=".json,.zip,application/json,application/zip"
             className={styles.hidden}
             onChange={(e) => {
               loadFile(e.target.files ? e.target.files[0] : undefined);
@@ -162,7 +163,10 @@ export const LoadStep: React.FC<ILoadStepProps> = ({ sp, targetUrl, reader, file
             <span className={ui.muted}>{strings.FactChecksum}</span>
             <span>{t.meta.sourceSiteUrl.replace(/^https?:\/\//i, '')}</span>
             <span>{t.schemaVersion}</span>
-            <span>{format(strings.ContentSummary, t.lists.length, listFields, views)}</span>
+            <span>
+              {format(strings.ContentSummary, t.lists.length, listFields, views)}
+              {t.meta.includesContent ? format(strings.ContentItems, items) : ''}
+            </span>
             <span>{t.meta.checksum ? t.meta.checksum.slice(0, 18) + '…' : strings.NoChecksum}</span>
           </div>
           {warnings.map((w) => (

@@ -45,3 +45,5 @@ registerToken({ name: 'groupkey', hasArgument: true, kind: 'text', autoTokenize:
 registerToken({ name: 'associatedownergroup', hasArgument: false, kind: 'text', autoTokenize: false });
 registerToken({ name: 'associatedmembergroup', hasArgument: false, kind: 'text', autoTokenize: false });
 registerToken({ name: 'associatedvisitorgroup', hasArgument: false, kind: 'text', autoTokenize: false });
+// People in item values and system fields: {principal:key} → the target login name, set by the PrincipalMapper.
+registerToken({ name: 'principal', hasArgument: true, kind: 'text', autoTokenize: false });

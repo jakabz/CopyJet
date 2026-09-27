@@ -4,7 +4,8 @@ import type { SPFI } from '@pnp/sp';
 import * as strings from 'CopyJetInstallWebPartStrings';
 import { createInstallContext, createProviders, runPlan, type IRunResult, type StepStatus } from '../../../core/engine';
 import type { Logger } from '../../../core/logger';
-import type { ArtifactKind, ConflictMode, ICopyJetTemplate, IInstallContext } from '../../../core/model';
+import type { PrincipalMapper } from '../../../core/mapping';
+import type { ArtifactKind, ConflictMode, IInstallContext, ITemplateReader } from '../../../core/model';
 import { buildPlan, type IPlanStep } from '../../../core/planner';
 import { LogViewer } from '../../../shared/components/LogViewer';
 import { Message, ProgressBar, Stats, ui } from '../../../shared/components/ui';
@@ -15,7 +16,9 @@ export type RunStatus = 'running' | 'finished';
 
 export interface IInstallRunProps {
   sp: SPFI;
-  template: ICopyJetTemplate;
+  reader: ITemplateReader;
+  /** The mapper of the mapping step: people found there are not looked up again. */
+  principals: PrincipalMapper;
   targetSiteTitle: string;
   disabled: string[];
   mode: ConflictMode;
@@ -33,7 +36,9 @@ const PHASES: Array<[ArtifactKind, () => string]> = [
   ['contentType', () => strings.PhaseContentTypes],
   ['list', () => strings.PhaseLists],
   ['listField', () => strings.PhaseListFields],
-  ['view', () => strings.PhaseViews]
+  ['view', () => strings.PhaseViews],
+  ['items', () => strings.PhaseItems],
+  ['itemLookups', () => strings.PhaseItemLookups]
 ];
 
 const FAILED: StepStatus[] = ['failed', 'blocked', 'cancelled'];
@@ -41,7 +46,8 @@ const FAILED: StepStatus[] = ['failed', 'blocked', 'cancelled'];
 const duration = (ms: number): string => format(strings.Duration, Math.floor(ms / 60000), Math.floor((ms % 60000) / 1000));
 
 /** Steps 4–5 (docs/ui install-4, install-5): the run with phases, progress and log, then the result. */
-export const InstallRun: React.FC<IInstallRunProps> = ({ sp, template, targetSiteTitle, disabled, mode, modes, logger, view, onStatus }) => {
+export const InstallRun: React.FC<IInstallRunProps> = ({ sp, reader, principals, targetSiteTitle, disabled, mode, modes, logger, view, onStatus }) => {
+  const template = reader.manifest;
   const plan = React.useMemo(() => buildPlan(template, { disabled }), [template, disabled]);
   const [statuses, setStatuses] = React.useState<{ [key: string]: StepStatus }>({});
   const [current, setCurrent] = React.useState<IPlanStep | undefined>(undefined);
@@ -65,7 +71,7 @@ export const InstallRun: React.FC<IInstallRunProps> = ({ sp, template, targetSit
       setElapsed(Date.now() - started);
       onStatus('finished', () => undefined);
     };
-    createInstallContext(sp, logger, ac.signal)
+    createInstallContext(sp, logger, ac.signal, { reader, principals })
       .then((c) => {
         setCtx(c);
         setCurrent(plan.steps[0]);

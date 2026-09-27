@@ -4,7 +4,7 @@ import '@pnp/sp/lists';
 import '@pnp/sp/folders';
 import { ContentTypes } from '@pnp/sp/content-types';
 import { normalizeContentTypeId } from '../contentTypes';
-import { CopyJetError, throwIfAborted } from '../errors';
+import { CopyJetError, isAbortError, throwIfAborted } from '../errors';
 import { setContentTypeOrder, type FetchLike } from '../http/raw';
 import { isHttpStatus } from '../http/status';
 import {
@@ -14,10 +14,12 @@ import {
   compareLists,
   isSupportedTemplate,
   listContentTypeFor,
-  listFolderPaths,
+  createFolder,
+  existingFolderPaths,
   listUpdateProps,
   missingFolders,
   readListContentTypes,
+  type IListContentTypes,
   siteContentTypeIdOf,
   toServerRelativeUrl,
   urlLeaf,
@@ -149,14 +151,14 @@ export class ListProvider implements IProvider<IList> {
     const changes: string[] = [];
     if (def.contentTypes && def.contentTypes.length) {
       const cts = await readListContentTypes(sp, listUrl);
-      if (def.contentTypes.some((id) => !listContentTypeFor(id, cts.all))) {
+      if (def.contentTypes.some((id) => !listContentTypeFor(id, cts))) {
         changes.push('contentTypes');
-      } else if (!this._orderMatches(def.contentTypes, cts.ordered)) {
+      } else if (!this._orderMatches(def.contentTypes, cts)) {
         changes.push('contentTypeOrder');
       }
     }
     if (def.folders && def.folders.length) {
-      const existing = await listFolderPaths(sp, listUrl);
+      const existing = await existingFolderPaths(sp, listUrl, def.template === DOCUMENT_LIBRARY);
       if (missingFolders(def.folders.map((f) => f.path), existing).length) {
         changes.push('folders');
       }
@@ -165,13 +167,14 @@ export class ListProvider implements IProvider<IList> {
   }
 
   /** The template's content types lead the target's visible order, in the same sequence. */
-  private _orderMatches(siteIds: string[], orderedListIds: string[]): boolean {
-    return siteIds.every((id, i) => orderedListIds[i] !== undefined && siteContentTypeIdOf(orderedListIds[i]) === normalizeContentTypeId(id));
+  private _orderMatches(siteIds: string[], cts: IListContentTypes): boolean {
+    return siteIds.every((id, i) => cts.ordered[i] !== undefined && siteContentTypeIdOf(cts.ordered[i], cts) === normalizeContentTypeId(id));
   }
 
   /**
    * Adds missing content types, puts the template's ones first (first = default), creates missing folders
-   * parent-first. Never removes a content type or folder (spike 04).
+   * parent-first. Never removes a content type or folder (spike 04). A content type the target site lacks is
+   * a warning, not a failure: the list is still usable, and failing it would drop its columns and items.
    */
   private async _syncStructure(sp: SPFI, def: IList, listUrl: string, ctx: IInstallContext): Promise<void> {
     const ref = { kind: this.kind, key: `list:${def.key}` };
@@ -180,27 +183,33 @@ export class ListProvider implements IProvider<IList> {
       const before = await readListContentTypes(sp, listUrl);
       for (const siteId of def.contentTypes) {
         throwIfAborted(ctx.signal);
-        if (!listContentTypeFor(siteId, before.all)) {
+        if (!listContentTypeFor(siteId, before)) {
           try {
             // URL-parameter form, as verified in spike 04 (PnPjs' helper posts the ID in a body instead).
             await spPost(ContentTypes(list.contentTypes, `addAvailableContentType('${normalizeContentTypeId(siteId)}')`));
           } catch (e) {
-            throw new CopyJetError('LIST_CT_FAILED', `Could not add content type ${siteId} to list ${def.url}; is it installed on the site?`, e);
+            if (isAbortError(e)) throw e;
+            ctx.log.warn(`Content type ${siteId} could not be added to the list; is it installed on the target site? The list keeps its other content types.`, {
+              artifact: ref,
+              code: 'LIST_CT_FAILED',
+              detail: siteId
+            });
           }
         }
       }
       const cts = await readListContentTypes(sp, listUrl);
-      if (!this._orderMatches(def.contentTypes, cts.ordered)) {
-        const lead = def.contentTypes.map((id) => listContentTypeFor(id, cts.all)!).filter((id) => !!id);
+      if (!this._orderMatches(def.contentTypes, cts)) {
+        const lead = def.contentTypes.map((id) => listContentTypeFor(id, cts)!).filter((id) => !!id);
         const rest = cts.ordered.filter((id) => lead.indexOf(id) < 0);
         await setContentTypeOrder(sp, listUrl, lead.concat(rest), ctx.signal, this._fetch);
       }
     }
     if (def.folders && def.folders.length) {
-      const create = missingFolders(def.folders.map((f) => f.path), await listFolderPaths(sp, listUrl, ctx.signal));
+      const isLibrary = def.template === DOCUMENT_LIBRARY;
+      const create = missingFolders(def.folders.map((f) => f.path), await existingFolderPaths(sp, listUrl, isLibrary, ctx.signal));
       for (const path of create) {
         throwIfAborted(ctx.signal);
-        await sp.web.folders.addUsingPath(`${listUrl}/${path}`);
+        await createFolder(sp, listUrl, path, isLibrary);
       }
       if (create.length) {
         ctx.log.info(`Folders created: ${create.length}.`, { artifact: ref });

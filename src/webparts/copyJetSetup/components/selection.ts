@@ -82,6 +82,16 @@ export function selectedRefs(artifacts: IDiscoveredArtifact[], selected: string[
   return artifacts.filter((a) => selected.indexOf(a.ref.key) >= 0).map((a) => a.ref);
 }
 
+/** Lists whose items CopyJet copies (custom lists; library files come with the file copy). */
+export function canCopyItems(a: IDiscoveredArtifact): boolean {
+  return a.ref.kind === 'list' && a.listTemplate === 100 && !a.unsupported;
+}
+
+/** 'items:<key>' refs for the selected lists switched to "structure + content". */
+export function contentRefs(contentKeys: string[], selected: string[]): IArtifactRef[] {
+  return contentKeys.filter((k) => selected.indexOf(k) >= 0).map((k) => ({ kind: 'items' as const, key: `items:${k.replace(/^list:/, '')}` }));
+}
+
 export function selectedArtifacts(artifacts: IDiscoveredArtifact[], selected: string[]): IDiscoveredArtifact[] {
   return artifacts.filter((a) => selected.indexOf(a.ref.key) >= 0);
 }

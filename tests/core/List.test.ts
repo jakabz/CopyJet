@@ -67,6 +67,22 @@ function fakeSite(state: ISiteState): { sp: ReturnType<typeof createMockSp>['sp'
       if (folders.indexOf(rel) < 0) folders.push(rel);
       return { body: { Name: rel.split('/').pop() } };
     }
+    // List folders as list items (spike 08 F): FSObjType 1 rows, and creation through AddValidateUpdateItemUsingPath.
+    if (req.method === 'GET' && (m = /\/getList\('([^']+)'\)\/items\?\$filter=FSObjType eq 1&\$select=FileRef/i.exec(req.url))) {
+      const listUrl = m[1];
+      return { body: (state.folders[listUrl] || []).filter((f) => f !== 'Attachments' && f !== 'Forms').map((f) => ({ FileRef: `${listUrl}/${f}` })) };
+    }
+    if (req.method === 'POST' && (m = /\/getList\('([^']+)'\)\/AddValidateUpdateItemUsingPath\(\)$/i.exec(req.url))) {
+      const listUrl = m[1];
+      const info = (req.body as { listItemCreateInfo: { FolderPath: { DecodedUrl: string }; LeafName: { DecodedUrl: string }; UnderlyingObjectType: number } }).listItemCreateInfo;
+      expect(info.UnderlyingObjectType).toBe(1);
+      const parent = info.FolderPath.DecodedUrl === listUrl ? '' : info.FolderPath.DecodedUrl.slice(listUrl.length + 1);
+      const folders = (state.folders[listUrl] = state.folders[listUrl] || []);
+      if (parent && folders.indexOf(parent) < 0) return { status: 500, body: { 'odata.error': { message: { value: 'Nincs ilyen URL-című fájl.' } } } };
+      const rel = parent ? `${parent}/${info.LeafName.DecodedUrl}` : info.LeafName.DecodedUrl;
+      if (folders.indexOf(rel) < 0) folders.push(rel);
+      return { body: { value: [{ FieldName: 'Id', FieldValue: String(++seq), HasException: false }] } };
+    }
     if ((m = /\/getList\('([^']+)'\)\/rootFolder\?/i.exec(req.url))) {
       return { body: { ContentTypeOrder: ((state.cts[m[1]] || { ordered: [] }).ordered).map((StringValue) => ({ StringValue })) } };
     }
@@ -275,13 +291,14 @@ describe('list structure (content types, folders)', () => {
     expect(await provider.diff(target.sp, teszt, c)).toMatchObject({ status: 'different', changes: ['contentTypeOrder'] });
   });
 
-  it('fails with LIST_CT_FAILED when a content type is missing from the target site', async () => {
+  it('warns (LIST_CT_FAILED) but still installs the list when a content type is missing from the target site', async () => {
     const { lists } = await extractAll();
     const target = targetSite();
     target.state.siteCts = ['0x01', '0x0101'];
-    await expect(new ListProvider(target.fetch).apply(target.sp, lists.find((l) => l.key === 'Teszt_lista')!, 'skip', ctx())).rejects.toMatchObject({
-      code: 'LIST_CT_FAILED'
-    });
+    const c = ctx();
+    expect(await new ListProvider(target.fetch).apply(target.sp, lists.find((l) => l.key === 'Teszt_lista')!, 'skip', c)).toMatchObject({ outcome: 'created' });
+    expect(c.log.entries.filter((e) => e.level !== 'info').map((e) => e.code)).toEqual(['LIST_CT_FAILED']);
+    expect(c.tokens.get('listkey', 'Teszt_lista')).toBeDefined();
   });
 });
 

@@ -115,3 +115,16 @@ export function deepTokenize<T>(value: T, ctx: TokenContext): T {
 export function deepResolve<T>(value: T, ctx: TokenContext): T {
   return deepMap(value, (s) => resolve(s, ctx)) as T;
 }
+
+/**
+ * Like resolve(), but leaves unknown and unresolved tokens as they are. For user content (item text, links)
+ * where "{…}" may be ordinary text rather than a token.
+ */
+export function resolveKnown(value: string, ctx: TokenContext): string {
+  return value.replace(TOKEN_PATTERN, (token: string, name: string, arg: string | undefined) => {
+    const def = getTokenDefinition(name);
+    if (!def || def.hasArgument !== (arg !== undefined)) return token;
+    const resolved = def.resolve ? def.resolve(arg, ctx) : ctx.get(name, arg);
+    return resolved === undefined ? token : resolved;
+  });
+}

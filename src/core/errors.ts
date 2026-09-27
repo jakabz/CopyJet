@@ -29,3 +29,8 @@ export function throwIfAborted(signal?: AbortSignal): void {
     throw new AbortError();
   }
 }
+
+/** Our AbortError or a fetch/DOM abort. */
+export function isAbortError(e: unknown): boolean {
+  return e instanceof AbortError || (typeof e === 'object' && e !== null && (e as Error).name === 'AbortError');
+}

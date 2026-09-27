@@ -76,6 +76,9 @@ declare interface ICopyJetSetupWebPartStrings {
   MissingTitle: string;
   MissingNote: string;
   AddAll: string;
+  ContentMissingTitle: string;
+  ContentMissingNote: string;
+  AddContent: string;
   StatLists: string;
   StatColumns: string;
   StatViews: string;
@@ -109,6 +112,14 @@ declare interface ICopyJetSetupWebPartStrings {
   KindList: string;
   KindListField: string;
   KindView: string;
+  FormatAuto: string;
+  StatItems: string;
+  AreaContent: string;
+  ContentText: string;
+  ContentNote: string;
+  PersonalNoteContent: string;
+  KindItems: string;
+  KindItemLookups: string;
   LogTitle: string;
   LogAll: string;
   LogInfo: string;
