@@ -2,6 +2,7 @@ import {
   LocalTimeConverter,
   PrincipalCollector,
   principalKind,
+  restPropertyOf,
   toItemField,
   toTargetValue,
   toTemplateValue,
@@ -42,6 +43,15 @@ describe('toItemField', () => {
     expect(toItemField({ InternalName: 'X', TypeAsString: 'Text', ReadOnlyField: true })).toBeUndefined();
     expect(toItemField({ InternalName: 'Szamitott', TypeAsString: 'Calculated' })).toBeUndefined();
     expect(toItemField({ InternalName: 'Terulet', TypeAsString: 'TaxonomyFieldType' })).toBeUndefined();
+  });
+});
+
+describe('restPropertyOf', () => {
+  it('reads people and lookups by ID and prefixes internal names starting with "_" (OData_)', () => {
+    expect(restPropertyOf(field('Title', 'Text'))).toBe('Title');
+    expect(restPropertyOf(field('Valaki', 'User'))).toBe('ValakiId');
+    expect(restPropertyOf(field('_ExtendedDescription', 'Note'))).toBe('OData__ExtendedDescription');
+    expect(restPropertyOf(field('_Hivatkozas', 'Lookup'))).toBe('OData__HivatkozasId');
   });
 });
 

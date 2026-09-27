@@ -22,6 +22,8 @@ export interface IExportStepProps {
   description: string;
   createdBy: string;
   preserveAuthors: boolean;
+  versionsFor: string[];
+  maxFileBytes: number;
   kindLabel: (kind: ArtifactKind) => string;
   logLabels: React.ComponentProps<typeof LogViewer>['labels'];
   /** Reports the status so the wizard can show Stop / New template in its footer. */
@@ -36,14 +38,14 @@ function message(e: unknown): string {
 }
 
 /** Step 4 (docs/ui setup-4): progress, log, output card with download. */
-export const ExportStep: React.FC<IExportStepProps> = ({ sp, refs, discovered, name, description, createdBy, preserveAuthors, kindLabel, logLabels, onStatus }) => {
+export const ExportStep: React.FC<IExportStepProps> = ({ sp, refs, discovered, name, description, createdBy, preserveAuthors, versionsFor, maxFileBytes, kindLabel, logLabels, onStatus }) => {
   const [logger] = React.useState(() => new Logger());
   const [status, setStatus] = React.useState<ExportStatus>('running');
   const [progress, setProgress] = React.useState<{ done: number; total: number; kind?: ArtifactKind }>({ done: 0, total: 1 });
   const [result, setResult] = React.useState<IExtractResult | undefined>(undefined);
   const [error, setError] = React.useState<string | undefined>(undefined);
   // Content (list items) makes a .zip package; structure alone stays a readable .json.
-  const extension = refs.some((r) => r.kind === 'items') ? 'zip' : 'json';
+  const extension = refs.some((r) => r.kind === 'items' || r.kind === 'files') ? 'zip' : 'json';
   const fileName = React.useMemo(() => templateFileName(name, new Date(), extension), [name, extension]);
 
   React.useEffect(() => {
@@ -53,7 +55,7 @@ export const ExportStep: React.FC<IExportStepProps> = ({ sp, refs, discovered, n
       onStatus(s, () => ac.abort());
     };
     report('running');
-    extractTemplate(sp, { refs, discovered, name, description, createdBy, preserveAuthors, log: logger, signal: ac.signal, onProgress: (done, total, kind) => setProgress({ done, total, kind }) }).then(
+    extractTemplate(sp, { refs, discovered, name, description, createdBy, preserveAuthors, versionsFor, maxFileBytes, log: logger, signal: ac.signal, onProgress: (done, total, kind) => setProgress({ done, total, kind }) }).then(
       (r) => {
         if (ac.signal.aborted) return;
         setResult(r);

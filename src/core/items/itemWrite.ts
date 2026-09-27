@@ -147,3 +147,12 @@ export function logItemFailures(ctx: IInstallContext, ref: IArtifactRef, failure
     ctx.log.warn(`${failures.length - limit} more items could not be written.`, { artifact: ref, code: 'ITEM_FAILED_MORE', detail: failures.length - limit });
   }
 }
+
+/** Values of columns the target list lacks would fail the whole item (spike 08 C): dropped with one warning each. */
+export function warnMissingFields(items: Array<{ values: { [name: string]: FieldValue } }>, fields: { [name: string]: ITargetField }, ref: IArtifactRef, ctx: IInstallContext): void {
+  const missing: { [name: string]: boolean } = {};
+  items.forEach((item) => Object.keys(item.values).forEach((name) => !fields[name] && (missing[name] = true)));
+  Object.keys(missing).forEach((name) =>
+    ctx.log.warn(`Column ${name} is not a writable column of the target list; its values are skipped.`, { artifact: ref, code: 'ITEM_FIELD_MISSING', detail: name })
+  );
+}

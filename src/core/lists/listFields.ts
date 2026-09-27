@@ -1,5 +1,6 @@
 import type { ICopyJetTemplate, IField } from '../model';
 import type { IFieldInfoLike } from '../fields';
+import { SYSTEM_MANAGED_FIELDS } from '../items/fieldValues';
 
 /** A list column in the context of its list (the provider's unit of work). */
 export interface IListFieldDef {
@@ -34,9 +35,9 @@ export function listFieldOrigin(info: IListFieldInfoLike, listId: string): ListF
   return !info.FromBaseType && info.CanBeDeleted ? 'siteColumn' : 'builtIn';
 }
 
-/** Fields CopyJet copies: visible list columns and site column instances. */
+/** Fields CopyJet copies: visible list columns and site column instances, not those SharePoint manages itself. */
 export function isCopiedListField(info: IListFieldInfoLike, listId: string): boolean {
-  return !info.Hidden && listFieldOrigin(info, listId) !== 'builtIn';
+  return !info.Hidden && SYSTEM_MANAGED_FIELDS.indexOf(info.InternalName) < 0 && listFieldOrigin(info, listId) !== 'builtIn';
 }
 
 /** All list columns of a template as provider inputs, in list order. */

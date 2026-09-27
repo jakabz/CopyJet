@@ -114,6 +114,10 @@ declare interface ICopyJetInstallWebPartStrings {
   KindLibrary: string;
   KindListField: string;
   KindView: string;
+  KindFiles: string;
+  PhaseFiles: string;
+  ContentFiles: string;
+  ReasontargetHasFiles: string;
   KindItems: string;
   KindItemLookups: string;
   PhaseItems: string;

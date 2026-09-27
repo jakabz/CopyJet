@@ -1,4 +1,5 @@
 import { contentTypeKey } from '../contentTypes/contentTypeModel';
+import type { IListFilesDef } from '../files/filesModel';
 import type { IListItemsDef } from '../items/itemsModel';
 import type { IListFieldDef } from '../lists/listFields';
 import type { IListViewDef } from '../lists/views';
@@ -23,6 +24,7 @@ export const artifactKeys = {
   listField: (listKey: string, internalName: string): string => `listField:${listKey}/${internalName}`,
   view: (listKey: string, title: string): string => `view:${listKey}/${title}`,
   items: (listKey: string): string => `items:${listKey}`,
+  files: (listKey: string): string => `files:${listKey}`,
   itemLookups: (listKey: string): string => `itemLookups:${listKey}`
 };
 
@@ -74,12 +76,42 @@ export function itemsDependencies(def: IListItemsDef, list: IList): IArtifactRef
   return refs.concat(listDependencies(list));
 }
 
+/** The step that fills a list with content: its items, or the files of a library. */
+export function contentStepRef(list: IList): IArtifactRef | undefined {
+  const mode = list.content && list.content.mode;
+  if (mode === 'items') return { kind: 'items', key: artifactKeys.items(list.key) };
+  if (mode === 'files') return { kind: 'files', key: artifactKeys.files(list.key) };
+  return undefined;
+}
+
 /**
- * The list's own items and the items of every list its lookups point to (their ID maps). Only items steps:
- * lookup rounds never wait for each other, so cyclic lookups (A → B → A) still install.
+ * The list's own items and the content of every list its lookups point to (their ID maps). Only content
+ * steps: lookup rounds never wait for each other, so cyclic lookups (A → B → A) still install.
  */
-export function itemLookupsDependencies(def: IListItemsDef): IArtifactRef[] {
+export function itemLookupsDependencies(def: IListItemsDef, lists: IList[] = []): IArtifactRef[] {
   const refs: IArtifactRef[] = [{ kind: 'items', key: artifactKeys.items(def.listKey) }];
-  def.lookupTargets.filter((k) => k !== def.listKey).forEach((k) => refs.push({ kind: 'items', key: artifactKeys.items(k) }));
+  def.lookupTargets
+    .filter((k) => k !== def.listKey)
+    .forEach((k) => {
+      const target = lists.filter((l) => l.key === k)[0];
+      refs.push((target && contentStepRef(target)) || { kind: 'items', key: artifactKeys.items(k) });
+    });
+  return refs;
+}
+
+/**
+ * A library's files need what its items would (list, columns, content types) and the content of the lists its
+ * lookups point to: file metadata is written in one go, so those ID maps must exist first.
+ */
+export function filesDependencies(def: IListFilesDef, lists: IList[]): IArtifactRef[] {
+  const list = lists.filter((l) => l.key === def.listKey)[0];
+  const refs = itemsDependencies(def, list);
+  def.lookupTargets
+    .filter((k) => k !== def.listKey)
+    .forEach((k) => {
+      const target = lists.filter((l) => l.key === k)[0];
+      const step = target && contentStepRef(target);
+      if (step) refs.push(step);
+    });
   return refs;
 }

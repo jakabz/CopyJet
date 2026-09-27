@@ -7,6 +7,8 @@ export interface IMockRequest {
   /** Decoded URL, e.g. https://x/sites/a/_api/web/fields?$filter=InternalName eq 'A' */
   url: string;
   body?: unknown;
+  /** The body as sent (Blob / ArrayBuffer / Uint8Array for uploads). */
+  rawBody?: unknown;
 }
 
 export interface IMockResponse {
@@ -30,7 +32,8 @@ export function createMockSp(handler: MockHandler, siteUrl: string = 'https://fa
         method: init.method || 'GET',
         // Query strings encode spaces as '+'; a literal plus arrives as %2B.
         url: decodeURIComponent(url.toString().replace(/\+/g, ' ')),
-        body: typeof init.body === 'string' && init.body ? JSON.parse(init.body) : undefined
+        body: typeof init.body === 'string' && init.body && /^[[{]/.test(init.body) ? JSON.parse(init.body) : undefined,
+        rawBody: init.body
       };
       requests.push(req);
       const res = handler(req) || { status: 404, body: { 'odata.error': { message: { value: `Unmocked ${req.method} ${req.url}` } } } };

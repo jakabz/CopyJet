@@ -1,3 +1,4 @@
+import { listFilesDefs, type IListFilesDef } from '../files/filesModel';
 import { listItemsDefs, type IListItemsDef } from '../items/itemsModel';
 import { listFieldDefs, type IListFieldDef } from '../lists/listFields';
 import { listViewDefs, type IListViewDef } from '../lists/views';
@@ -5,6 +6,7 @@ import type { ArtifactKind, IArtifactRef, IContentType, ICopyJetTemplate, IField
 import {
   artifactKeys,
   contentTypeDependencies,
+  filesDependencies,
   groupDependencies,
   itemLookupsDependencies,
   itemsDependencies,
@@ -15,7 +17,7 @@ import {
 } from './dependencies';
 
 /** Provider input per kind. */
-export type StepDef = IGroup | IField | IContentType | IList | IListFieldDef | IListViewDef | IListItemsDef;
+export type StepDef = IGroup | IField | IContentType | IList | IListFieldDef | IListViewDef | IListItemsDef | IListFilesDef;
 
 export interface IPlanStep {
   ref: IArtifactRef;
@@ -53,7 +55,7 @@ export interface IPlanOptions {
 }
 
 /** Install order within a level (rendszerterv §6): groups, site columns, content types, lists, list columns, views, content. */
-const KIND_ORDER: ArtifactKind[] = ['group', 'siteField', 'contentType', 'list', 'listField', 'view', 'items', 'itemLookups'];
+const KIND_ORDER: ArtifactKind[] = ['group', 'siteField', 'contentType', 'list', 'listField', 'view', 'items', 'files', 'itemLookups'];
 
 function node(kind: ArtifactKind, key: string, def: StepDef, deps: IArtifactRef[]): { ref: IArtifactRef; def: StepDef; deps: string[] } {
   return { ref: { kind, key }, def, deps: deps.map((d) => d.key) };
@@ -74,7 +76,8 @@ export function templateNodes(template: ICopyJetTemplate): Array<{ ref: IArtifac
     ...listItemsDefs(template).map((d) => node('items', artifactKeys.items(d.listKey), d, itemsDependencies(d, template.lists.filter((l) => l.key === d.listKey)[0]))),
     ...listItemsDefs(template)
       .filter((d) => d.lookupTargets.length > 0)
-      .map((d) => node('itemLookups', artifactKeys.itemLookups(d.listKey), d, itemLookupsDependencies(d)))
+      .map((d) => node('itemLookups', artifactKeys.itemLookups(d.listKey), d, itemLookupsDependencies(d, template.lists))),
+    ...listFilesDefs(template).map((d) => node('files', artifactKeys.files(d.listKey), d, filesDependencies(d, template.lists)))
   ];
 }
 

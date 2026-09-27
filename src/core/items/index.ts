@@ -4,3 +4,4 @@ export * from './fieldValues';
 export * from './principals';
 export * from './itemsModel';
 export * from './itemWrite';
+export * from './sourceItems';

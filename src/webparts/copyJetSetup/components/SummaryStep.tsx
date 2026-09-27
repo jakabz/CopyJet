@@ -7,7 +7,7 @@ import { Logger } from '../../../core/logger';
 import type { ArtifactKind, IArtifactRef, ICopyJetTemplate, IDiscoveredArtifact } from '../../../core/model';
 import { Button, Message, Stats, ui } from '../../../shared/components/ui';
 import { Spinner } from '@fluentui/react';
-import { canCopyItems, format } from './selection';
+import { canCopyContent, format } from './selection';
 
 export interface ISummaryStepProps {
   sp: SPFI;
@@ -17,7 +17,7 @@ export interface ISummaryStepProps {
   createdBy: string;
   kindLabel: (kind: ArtifactKind) => string;
   /** Lists copied with items and their item count (from the discovery); items are not read in the dry run. */
-  content: { lists: number; items: number; personal: boolean };
+  content: { lists: number; items: number; libraries: number; files: number; withVersions: number; personal: boolean };
   /** List ref keys ('list:K') copied with content. */
   contentKeys: string[];
   /** Switches content on for these list ref keys. */
@@ -65,7 +65,7 @@ export const SummaryStep: React.FC<ISummaryStepProps> = ({ sp, refs, discovered,
     contentKeys.map((k) => k.replace(/^list:/, ''))
   )
     .map((key) => discovered.filter((a) => a.ref.key === `list:${key}`)[0])
-    .filter((a) => !!a && canCopyItems(a));
+    .filter((a) => !!a && canCopyContent(a));
   const listFields = t.lists.reduce((n, l) => n + (l.fields || []).length, 0);
   const views = t.lists.reduce((n, l) => n + (l.views || []).length, 0);
 
@@ -105,6 +105,7 @@ export const SummaryStep: React.FC<ISummaryStepProps> = ({ sp, refs, discovered,
         items={[
           { label: strings.StatLists, value: t.lists.length },
           ...(content.lists > 0 ? [{ label: strings.StatItems, value: content.items }] : []),
+          ...(content.libraries > 0 ? [{ label: strings.StatFiles, value: content.files }] : []),
           { label: strings.StatColumns, value: t.siteFields.length + listFields },
           { label: strings.StatViews, value: views },
           { label: strings.StatGroups, value: t.groups.length }
@@ -129,6 +130,16 @@ export const SummaryStep: React.FC<ISummaryStepProps> = ({ sp, refs, discovered,
               <td className={ui.strong}>{strings.AreaContent}</td>
               <td>{format(strings.ContentText, content.lists, content.items)}</td>
               <td className={ui.muted}>{strings.ContentNote}</td>
+            </tr>
+          )}
+          {content.libraries > 0 && (
+            <tr>
+              <td className={ui.strong}>{strings.AreaFiles}</td>
+              <td>
+                {format(strings.FilesText, content.libraries, content.files)}
+                {content.withVersions > 0 ? format(strings.FilesWithVersions, content.withVersions) : ''}
+              </td>
+              <td className={ui.muted}>{strings.FilesNote}</td>
             </tr>
           )}
           {t.groups.length > 0 && (

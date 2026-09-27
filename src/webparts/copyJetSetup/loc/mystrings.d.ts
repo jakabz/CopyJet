@@ -112,6 +112,13 @@ declare interface ICopyJetSetupWebPartStrings {
   KindList: string;
   KindListField: string;
   KindView: string;
+  On: string;
+  KindFiles: string;
+  StatFiles: string;
+  AreaFiles: string;
+  FilesText: string;
+  FilesWithVersions: string;
+  FilesNote: string;
   FormatAuto: string;
   StatItems: string;
   AreaContent: string;

@@ -45,8 +45,22 @@ const KINDS: { [typeAsString: string]: ItemFieldKind } = {
 /** Types whose value CopyJet does not copy yet (warned once per column); everything else unknown is ignored. */
 export const NOT_YET_COPIED_TYPES = ['TaxonomyFieldType', 'TaxonomyFieldTypeMulti', 'Thumbnail', 'Location', 'Geolocation'];
 
-/** Writable columns that are not item content (or are handled separately: content type, system values). */
-const SKIPPED_FIELDS = ['ContentType', 'Attachments', '_ColorTag', 'ComplianceAssetId', 'Author', 'Editor', 'Created', 'Modified', 'FileLeafRef'];
+/**
+ * Columns SharePoint adds and fills itself (automatic image tags of libraries, spike 10 A): neither the column
+ * nor its values are copied, and nothing is warned about them.
+ */
+export const SYSTEM_MANAGED_FIELDS = ['MediaServiceImageTags'];
+
+/**
+ * Writable columns that are not item content, or are handled separately: content type, system values, the file
+ * name (FileLeafRef) of library items.
+ */
+const SKIPPED_FIELDS = ['ContentType', 'Attachments', '_ColorTag', 'ComplianceAssetId', 'Author', 'Editor', 'Created', 'Modified', 'FileLeafRef'].concat(SYSTEM_MANAGED_FIELDS);
+
+/** A visible column whose values CopyJet does not copy yet (the extractors warn once per column). */
+export function isNotYetCopied(f: { InternalName: string; TypeAsString: string; Hidden?: boolean }): boolean {
+  return !f.Hidden && NOT_YET_COPIED_TYPES.indexOf(f.TypeAsString) >= 0 && SYSTEM_MANAGED_FIELDS.indexOf(f.InternalName) < 0;
+}
 
 export interface IItemField {
   internalName: string;
@@ -68,9 +82,14 @@ export function toItemField(f: { InternalName: string; TypeAsString: string; Hid
 export const isLookupKind = (kind: ItemFieldKind): boolean => kind === 'lookup' || kind === 'lookupMulti';
 export const isUserKind = (kind: ItemFieldKind): boolean => kind === 'user' || kind === 'userMulti';
 
-/** The REST property holding the value: person and lookup columns are read by ID (no $expand, no lookup threshold). */
+/**
+ * The REST property holding the value: person and lookup columns are read by ID (no $expand, no lookup
+ * threshold). Internal names starting with "_" are exposed with an "OData_" prefix (_ExtendedDescription →
+ * OData__ExtendedDescription); selecting the bare name fails the whole query (HTTP 400).
+ */
 export function restPropertyOf(field: IItemField): string {
-  return isLookupKind(field.kind) || isUserKind(field.kind) ? `${field.internalName}Id` : field.internalName;
+  const name = field.internalName.charAt(0) === '_' ? `OData_${field.internalName}` : field.internalName;
+  return isLookupKind(field.kind) || isUserKind(field.kind) ? `${name}Id` : name;
 }
 
 /** Multi-value REST values: a plain array (nometadata) or { results: [] } (verbose). */

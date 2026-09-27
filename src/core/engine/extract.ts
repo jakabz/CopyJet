@@ -44,6 +44,10 @@ export interface IExtractRequest {
   createdBy: string;
   /** Items keep their author, editor and dates (default true). */
   preserveAuthors?: boolean;
+  /** Libraries (template keys) whose earlier file versions are copied too. */
+  versionsFor?: string[];
+  /** Files larger than this stay out of the package (default 250 MB). */
+  maxFileBytes?: number;
   log: Logger;
   signal?: AbortSignal;
   /** Called before each extractor runs (with its kind) and once at the end (without). */
@@ -106,6 +110,8 @@ export async function extractTemplate(sp: SPFI, req: IExtractRequest): Promise<I
       includeVersions: false,
       includeMembers: false,
       preserveAuthors: req.preserveAuthors !== false,
+      versionsFor: req.versionsFor,
+      maxFileBytes: req.maxFileBytes,
       tokens: site.tokens,
       log: req.log,
       signal: req.signal
