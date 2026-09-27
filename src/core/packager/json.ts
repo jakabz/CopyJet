@@ -2,6 +2,7 @@ import { CopyJetError, throwIfAborted } from '../errors';
 import type { ICopyJetTemplate, IMeta, ITemplateReader, ITemplateWriter } from '../model';
 import { CURRENT_SCHEMA_VERSION, migrate, validateTemplate } from '../schema';
 import { COPYJET_VERSION } from '../version';
+import { manifestChecksumBytes, packageChecksum } from './checksum';
 import { loadZipPackage } from './zip';
 
 export type NewTemplateMeta = Omit<IMeta, 'generator' | 'checksum' | 'estimatedSizeBytes'>;
@@ -42,15 +43,24 @@ export class JsonTemplateWriter implements ITemplateWriter {
     if (!result.valid) {
       throw new CopyJetError('TEMPLATE_INVALID', 'The template does not match the schema.', result.errors);
     }
+    delete this.manifest.meta.checksum;
+    this.manifest.meta.estimatedSizeBytes = manifestChecksumBytes(this.manifest).length;
+    this.manifest.meta.checksum = await packageChecksum(this.manifest, [], signal);
     return new Blob([JSON.stringify(this.manifest, null, 2)], { type: 'application/json' });
   }
 }
 
 class JsonTemplateReader implements ITemplateReader {
   public readonly manifest: ICopyJetTemplate;
+  public readonly storedManifest: ICopyJetTemplate;
 
-  constructor(manifest: ICopyJetTemplate) {
+  constructor(manifest: ICopyJetTemplate, stored: ICopyJetTemplate) {
     this.manifest = manifest;
+    this.storedManifest = stored;
+  }
+
+  public entries(): string[] {
+    return [];
   }
 
   public has(): boolean {
@@ -69,6 +79,9 @@ class JsonTemplateReader implements ITemplateReader {
 function isZip(head: Uint8Array): boolean {
   return head.length >= 2 && head[0] === 0x50 && head[1] === 0x4b; // "PK"
 }
+
+/** A deep copy of parsed JSON, kept as stored before migration (checksum verification). */
+const clone = <T>(value: unknown): T => JSON.parse(JSON.stringify(value)) as T;
 
 /** Migrates and validates a parsed manifest. */
 function checkedManifest(json: unknown): ICopyJetTemplate {
@@ -104,7 +117,8 @@ export async function openTemplate(file: Blob, signal?: AbortSignal): Promise<IT
   const head = new Uint8Array(await file.slice(0, 2).arrayBuffer());
   if (isZip(head)) {
     const pkg = await loadZipPackage(file, signal);
-    return checkContentEntries(pkg.open(checkedManifest(pkg.manifest)));
+    const stored = clone<ICopyJetTemplate>(pkg.manifest);
+    return checkContentEntries(pkg.open(checkedManifest(pkg.manifest), stored));
   }
   const text = (await file.text()).replace(/^\uFEFF/, '');
   throwIfAborted(signal);
@@ -114,5 +128,6 @@ export async function openTemplate(file: Blob, signal?: AbortSignal): Promise<IT
   } catch (e) {
     throw new CopyJetError('TEMPLATE_PARSE', 'The file is not valid JSON.', e instanceof Error ? e.message : e);
   }
-  return checkContentEntries(new JsonTemplateReader(checkedManifest(json)));
+  const stored = clone<ICopyJetTemplate>(json);
+  return checkContentEntries(new JsonTemplateReader(checkedManifest(json), stored));
 }
