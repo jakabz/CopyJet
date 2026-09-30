@@ -1,3 +1,4 @@
+import { TermStoreClient, fillTermSetPath } from '../taxonomy';
 import type { SPFI } from '@pnp/sp';
 import '@pnp/sp/webs';
 import '@pnp/sp/fields';
@@ -43,21 +44,21 @@ export class SiteFieldExtractor implements IExtractor<IField> {
     const fields = await this._customFields(sp, SELECT);
     throwIfAborted(opts.signal);
 
-    fields
-      .filter((f) => wanted.indexOf(siteFieldKey(f.InternalName)) >= 0)
-      .forEach((f) => {
-        const ref: IArtifactRef = { kind: this.kind, key: siteFieldKey(f.InternalName) };
-        const def = templateFieldFrom(f, opts.tokens, opts.log, ref);
-        this._warnings(def, ref, opts, out);
+    const termStore = new TermStoreClient(sp);
+    for (const f of fields.filter((x) => wanted.indexOf(siteFieldKey(x.InternalName)) >= 0)) {
+      const ref: IArtifactRef = { kind: this.kind, key: siteFieldKey(f.InternalName) };
+      const def = templateFieldFrom(f, opts.tokens, opts.log, ref);
+      await fillTermSetPath(def, termStore, (message) => opts.log.warn(message, { artifact: ref, code: 'TERM_SET_NOT_FOUND' }));
+      this._warnings(def, ref, opts, out);
 
-        const list = out.manifest.siteFields;
-        const existing = list.findIndex((x) => x.internalName === def.internalName);
-        if (existing >= 0) {
-          list[existing] = def;
-        } else {
-          list.push(def);
-        }
-      });
+      const list = out.manifest.siteFields;
+      const existing = list.findIndex((x) => x.internalName === def.internalName);
+      if (existing >= 0) {
+        list[existing] = def;
+      } else {
+        list.push(def);
+      }
+    }
 
     wanted
       .filter((key) => !fields.some((f) => siteFieldKey(f.InternalName) === key))

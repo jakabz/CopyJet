@@ -31,7 +31,11 @@ export interface ISourceColumns {
 /** The columns whose values are copied, and the list's content types; warns once per column not copied yet. */
 export async function readSourceColumns(sp: SPFI, listUrl: string, ref: IArtifactRef, log: Logger): Promise<ISourceColumns> {
   const [infos, contentTypes] = await Promise.all([
-    sp.web.getList(listUrl).fields.select('InternalName', 'TypeAsString', 'Hidden', 'ReadOnlyField')<Array<{ InternalName: string; TypeAsString: string; Hidden: boolean; ReadOnlyField: boolean }>>(),
+    sp.web
+      .getList(listUrl)
+      .fields.select('InternalName', 'TypeAsString', 'Hidden', 'ReadOnlyField', 'SchemaXml')<
+      Array<{ InternalName: string; TypeAsString: string; Hidden: boolean; ReadOnlyField: boolean; SchemaXml: string }>
+    >(),
     readListContentTypes(sp, listUrl)
   ]);
   infos
@@ -70,6 +74,8 @@ export interface IToTemplateItemContext {
   columns: ISourceColumns;
   tokens: TokenContext;
   principals: PrincipalCollector;
+  /** Term ID → template term key (Managed Metadata values); without it those values are not carried. */
+  terms?: (termId: string) => string | undefined;
   /** Keep author, editor and dates (default true). */
   preserveAuthors?: boolean;
 }
@@ -80,7 +86,7 @@ export function toTemplateItem(raw: RawItem, ctx: IToTemplateItemContext): IItem
   const dir = raw.FileDirRef || '';
   if (dir.toLowerCase().indexOf(`${ctx.listUrl.toLowerCase()}/`) === 0) item.folder = dir.slice(ctx.listUrl.length + 1);
   if (raw.ContentTypeId) item.contentType = siteContentTypeIdOf(raw.ContentTypeId, ctx.columns.contentTypes);
-  const valueCtx = { tokens: ctx.tokens, principal: (id: number) => ctx.principals.token(id) };
+  const valueCtx = { tokens: ctx.tokens, principal: (id: number) => ctx.principals.token(id), term: ctx.terms };
   ctx.columns.fields.forEach((f) => {
     const v = toTemplateValue(f, raw[restPropertyOf(f)], valueCtx);
     if (v !== undefined) item.values[f.internalName] = v;

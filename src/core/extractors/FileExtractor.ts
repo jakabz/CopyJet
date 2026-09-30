@@ -7,6 +7,7 @@ import { DEFAULT_MAX_FILE_BYTES, fileEntryPath, fileVersionEntryPath, filesFolde
 import { limitConcurrency } from '../http/concurrency';
 import { PrincipalCollector, SITE_USER_SELECT, forEachItemPage, itemSelect, readSourceColumns, toTemplateItem, type ISiteUserLike, type RawItem } from '../items';
 import { loadSourceSite } from '../lists';
+import { TermCollector, TermStoreClient, prepareTerms } from '../taxonomy';
 import type { IArtifactRef, IDiscoveredArtifact, IExtractOptions, IExtractor, IFilesMetaFile, ITemplateWriter } from '../model';
 
 type FileEntry = IFilesMetaFile['files'][number];
@@ -46,6 +47,7 @@ export class FileExtractor implements IExtractor<IListFilesDef> {
     if (wanted.length === 0) return;
     const [site, users] = await Promise.all([loadSourceSite(sp, opts.signal), sp.web.siteUsers.select(...SITE_USER_SELECT)<ISiteUserLike[]>()]);
     const principals = new PrincipalCollector(out.manifest.principals, users);
+    const terms = new TermCollector((out.manifest.terms = out.manifest.terms || []), new TermStoreClient(sp));
     const maxBytes = opts.maxFileBytes || DEFAULT_MAX_FILE_BYTES;
 
     for (const l of site.lists.filter((x) => wanted.indexOf(filesKey(x.key)) >= 0)) {
@@ -58,8 +60,9 @@ export class FileExtractor implements IExtractor<IListFilesDef> {
       }
       const listUrl = l.info.RootFolder.ServerRelativeUrl;
       const columns = await readSourceColumns(sp, listUrl, ref, opts.log);
+      await prepareTerms(terms, columns.fields, (message, detail) => opts.log.warn(message, { artifact: ref, code: 'TERM_SET_NOT_FOUND', detail }), opts.signal);
       const withVersions = (opts.versionsFor || []).indexOf(l.key) >= 0;
-      const ctx = { listUrl, columns, tokens: opts.tokens, principals, preserveAuthors: opts.preserveAuthors };
+      const ctx = { listUrl, columns, tokens: opts.tokens, principals, terms: (id: string) => terms.key(id), preserveAuthors: opts.preserveAuthors };
       const found: Array<{ raw: RawItem; entry: FileEntry }> = [];
       await forEachItemPage(
         sp,

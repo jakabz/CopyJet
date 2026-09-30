@@ -107,7 +107,8 @@ async function extractPackage(): Promise<ITemplateReader> {
     { includeContent: true, includeVersions: false, includeMembers: false, tokens: site.tokens, log },
     writer
   );
-  expect(log.entries.filter((e) => e.level === 'warn').map((e) => e.code)).toEqual(['ITEM_FIELD_NOT_COPIED', 'ATTACHMENT_RENAMED', 'ITEM_FIELD_NOT_COPIED']);
+  // The Managed Metadata column (Terulet) is copied now (spike 11); it has no values here.
+  expect(log.entries.filter((e) => e.level === 'warn').map((e) => e.code)).toEqual(['ATTACHMENT_RENAMED']);
   return openTemplate(await writer.finalize());
 }
 

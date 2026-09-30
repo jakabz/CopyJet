@@ -42,7 +42,14 @@ describe('toItemField', () => {
     expect(toItemField({ InternalName: 'X', TypeAsString: 'Text', Hidden: true })).toBeUndefined();
     expect(toItemField({ InternalName: 'X', TypeAsString: 'Text', ReadOnlyField: true })).toBeUndefined();
     expect(toItemField({ InternalName: 'Szamitott', TypeAsString: 'Calculated' })).toBeUndefined();
-    expect(toItemField({ InternalName: 'Terulet', TypeAsString: 'TaxonomyFieldType' })).toBeUndefined();
+    expect(toItemField({ InternalName: 'Kep', TypeAsString: 'Thumbnail' })).toBeUndefined();
+    expect(
+      toItemField({
+        InternalName: 'Terulet',
+        TypeAsString: 'TaxonomyFieldType',
+        SchemaXml: '<Field><Customization><ArrayOfProperty><Property><Name>TermSetId</Name><Value>CAAF4DD7-A354-4085-B190-05C20A16D9E2</Value></Property></ArrayOfProperty></Customization></Field>'
+      })
+    ).toEqual({ internalName: 'Terulet', typeAsString: 'TaxonomyFieldType', kind: 'taxonomy', termSetId: 'caaf4dd7-a354-4085-b190-05c20a16d9e2' });
   });
 });
 

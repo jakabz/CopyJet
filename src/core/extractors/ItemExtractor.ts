@@ -21,6 +21,7 @@ import {
   type ISiteUserLike
 } from '../items';
 import { loadSourceSite } from '../lists';
+import { TermCollector, TermStoreClient, prepareTerms } from '../taxonomy';
 import type { IArtifactRef, IDiscoveredArtifact, IExtractOptions, IExtractor, IItemsFile, ITemplateWriter } from '../model';
 import type { IListItemsDef } from '../items';
 
@@ -48,6 +49,7 @@ export class ItemExtractor implements IExtractor<IListItemsDef> {
     if (wanted.length === 0) return;
     const [site, users] = await Promise.all([loadSourceSite(sp, opts.signal), sp.web.siteUsers.select(...SITE_USER_SELECT)<ISiteUserLike[]>()]);
     const principals = new PrincipalCollector(out.manifest.principals, users);
+    const terms = new TermCollector((out.manifest.terms = out.manifest.terms || []), new TermStoreClient(sp));
 
     for (const l of site.lists.filter((x) => wanted.indexOf(itemsKey(x.key)) >= 0)) {
       throwIfAborted(opts.signal);
@@ -59,8 +61,9 @@ export class ItemExtractor implements IExtractor<IListItemsDef> {
       }
       const listUrl = l.info.RootFolder.ServerRelativeUrl;
       const columns = await readSourceColumns(sp, listUrl, ref, opts.log);
+      await prepareTerms(terms, columns.fields, (message, detail) => opts.log.warn(message, { artifact: ref, code: 'TERM_SET_NOT_FOUND', detail }), opts.signal);
       const file: IItemsFile = { listKey: l.key, items: [] };
-      const ctx = { listUrl, columns, tokens: opts.tokens, principals, preserveAuthors: opts.preserveAuthors };
+      const ctx = { listUrl, columns, tokens: opts.tokens, principals, terms: (id: string) => terms.key(id), preserveAuthors: opts.preserveAuthors };
       const withFiles: number[] = [];
       await forEachItemPage(
         sp,
