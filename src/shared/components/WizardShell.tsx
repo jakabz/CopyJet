@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { SOLUTION_VERSION } from '../../core/version';
 import styles from './ui.module.scss';
 
 export interface IWizardShellProps {
@@ -16,7 +17,7 @@ export interface IWizardShellProps {
   children?: React.ReactNode;
 }
 
-/** Wizard card of the docs/ui mockups: title row, step indicator with lines, body, footer bar. */
+/** Wizard card of the docs/ui mockups: title row, step indicator with lines, body, footer bar with the version on the left. */
 export const WizardShell: React.FC<IWizardShellProps> = ({ title, subtitle, steps, current, footerStart, footerEnd, children }) => (
   <section className={styles.card}>
     <div className={styles.header}>
@@ -37,12 +38,11 @@ export const WizardShell: React.FC<IWizardShellProps> = ({ title, subtitle, step
       </ol>
     </div>
     <div className={styles.body}>{children}</div>
-    {(footerStart || footerEnd) && (
-      <div className={styles.footer}>
-        {footerStart}
-        <div className={styles.spacer} />
-        {footerEnd}
-      </div>
-    )}
+    <div className={styles.footer}>
+      <span className={`${styles.muted} ${styles.version}`}>CopyJet {SOLUTION_VERSION}</span>
+      {footerStart}
+      <div className={styles.spacer} />
+      {footerEnd}
+    </div>
   </section>
 );

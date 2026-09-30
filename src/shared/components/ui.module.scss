@@ -96,6 +96,12 @@
   background: t.$surfaceAlt;
 }
 
+.version {
+  font-size: 12px;
+  white-space: nowrap;
+  margin-right: 8px;
+}
+
 .spacer {
   flex-grow: 1;
 }

@@ -58,7 +58,7 @@ const CopyJetInstall: React.FC<ICopyJetInstallProps> = ({ sp, siteTitle, siteUrl
     );
     footerEnd = <Button text={strings.Next} kind="primary" disabled={!template || !state.permissionsOk} onClick={() => update({ step: 1 })} />;
   } else if (state.step === 1) {
-    body = <MappingStep template={template} principals={state.principals!} />;
+    body = <MappingStep sp={sp} template={template} principals={state.principals!} />;
     footerEnd = (
       <>
         <Button text={strings.Back} onClick={() => update({ step: 0 })} />
