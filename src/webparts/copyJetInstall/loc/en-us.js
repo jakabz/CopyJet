@@ -79,6 +79,7 @@ define([], function() {
     "ReasontitleConflict": "another list already has this title",
     "ReasonidConflict": "another column uses this ID",
     "Reasontaxonomy": "Managed Metadata column – phase 2",
+    "ReasontermSetMissing": "the term set (group/set) is not on the target – the Managed Metadata column is not created",
     "ReasonnameConflict": "another content type has this name",
     "Reasontemplate": "different list type on the target",
     "Reasonurl": "the list cannot be created at this URL",

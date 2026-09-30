@@ -1,6 +1,19 @@
 import type { SPFI } from '@pnp/sp';
 import { CopyJetError } from '../errors';
-import { CREATE_CT_QUERY_ID, createContentTypeBody, fieldLinksBody, setGroupOwnerBody, wrapRequest, type ICsomBody, type IFieldLinkAdd, type IFieldLinkFlags } from './csomXml';
+import {
+  CREATE_CT_QUERY_ID,
+  FIELD_QUERY_ID,
+  addExistingFieldBody,
+  createContentTypeBody,
+  createTaxonomyFieldBody,
+  fieldLinksBody,
+  setGroupOwnerBody,
+  wrapRequest,
+  type ICsomBody,
+  type IFieldLinkAdd,
+  type IFieldLinkFlags,
+  type ITaxonomyFieldSpec
+} from './csomXml';
 import { rawPost, type FetchLike } from './raw';
 
 export type { FetchLike } from './raw';
@@ -83,4 +96,37 @@ export async function csomUpdateFieldLinks(
 /** Makes a SharePoint group the owner of another group (REST cannot, spike 07). */
 export async function csomSetGroupOwner(sp: SPFI, groupId: number, ownerGroupId: number, signal?: AbortSignal, fetchImpl?: FetchLike): Promise<void> {
   await processQuery(sp, setGroupOwnerBody(groupId, ownerGroupId), signal, fetchImpl);
+}
+
+export interface ICsomFieldInfo {
+  id: string;
+  internalName: string;
+  title: string;
+}
+
+/** The field the FIELD_QUERY_ID query returned; CSOM writes GUIDs as "/Guid(…)/". */
+function fieldFrom(result: unknown[]): ICsomFieldInfo {
+  const i = result.indexOf(FIELD_QUERY_ID);
+  const f = i >= 0 ? (result[i + 1] as { Id?: string; InternalName?: string; Title?: string }) : undefined;
+  if (!f || !f.Id) {
+    throw new CopyJetError('CSOM_UNEXPECTED_RESPONSE', 'ProcessQuery did not return the field.', result);
+  }
+  return { id: f.Id.replace(/^\/Guid\(|\)\/$/g, '').toLowerCase(), internalName: f.InternalName || '', title: f.Title || '' };
+}
+
+/** Creates a Managed Metadata column on a list (or, without listUrl, on the web) bound to a term set (spike 11 C2). */
+export async function csomCreateTaxonomyField(
+  sp: SPFI,
+  listUrl: string | undefined,
+  spec: ITaxonomyFieldSpec,
+  options: number,
+  signal?: AbortSignal,
+  fetchImpl?: FetchLike
+): Promise<ICsomFieldInfo> {
+  return fieldFrom(await processQuery(sp, createTaxonomyFieldBody(listUrl, spec, options), signal, fetchImpl));
+}
+
+/** Puts an existing site column on a list (the Managed Metadata way: its SchemaXml cannot be re-posted). */
+export async function csomAddExistingField(sp: SPFI, listUrl: string, fieldId: string, signal?: AbortSignal, fetchImpl?: FetchLike): Promise<ICsomFieldInfo> {
+  return fieldFrom(await processQuery(sp, addExistingFieldBody(listUrl, fieldId), signal, fetchImpl));
 }

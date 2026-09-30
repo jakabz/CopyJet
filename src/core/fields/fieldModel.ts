@@ -129,3 +129,28 @@ function norm(value: unknown): string {
 export function compareFields(template: IField, target: IField): string[] {
   return COMPARED.filter((k) => norm(template[k]) !== norm(target[k]));
 }
+
+const xmlAttr = (value: string): string => value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+/**
+ * The plain field element a Managed Metadata column is created from (spike 11 C2): no Customization, no List,
+ * no TextField – the term store binding is set afterwards and SharePoint wires the rest.
+ */
+export function taxonomyFieldXml(def: IField, title: string): string {
+  const multi = def.type === 'TaxonomyFieldTypeMulti';
+  const attrs = [
+    `Type="${multi ? 'TaxonomyFieldTypeMulti' : 'TaxonomyFieldType'}"`,
+    def.id ? `ID="{${xmlAttr(def.id)}}"` : '',
+    `Name="${xmlAttr(def.internalName)}"`,
+    `StaticName="${xmlAttr(def.internalName)}"`,
+    `DisplayName="${xmlAttr(title)}"`,
+    'ShowField="Term1033"',
+    `Mult="${multi ? 'TRUE' : 'FALSE'}"`,
+    `Required="${def.required ? 'TRUE' : 'FALSE'}"`,
+    def.group ? `Group="${xmlAttr(def.group)}"` : '',
+    def.description ? `Description="${xmlAttr(def.description)}"` : ''
+  ].filter((a) => !!a);
+  return `<Field ${attrs.join(' ')}${multi ? ' Sortable="FALSE"' : ''} />`;
+}
+
+export const isTaxonomyType = (type: string): boolean => type === 'TaxonomyFieldType' || type === 'TaxonomyFieldTypeMulti';

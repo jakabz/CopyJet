@@ -3,7 +3,9 @@ import '@pnp/sp/webs';
 import '@pnp/sp/lists';
 import { AddFieldOptions } from '@pnp/sp/fields';
 import { CopyJetError, throwIfAborted } from '../errors';
-import { compareFields, fieldUpdate, resolveFieldDef, sanitizeFieldXml, toFieldDef, type IFieldInfoLike } from '../fields';
+import { compareFields, fieldUpdate, isTaxonomyType, resolveFieldDef, sanitizeFieldXml, taxonomyFieldXml, toFieldDef, type IFieldInfoLike } from '../fields';
+import { csomAddExistingField, csomCreateTaxonomyField, type FetchLike } from '../http/csom';
+import { resolveTargetTermSet, termStoreFor, type ITargetTermSet } from '../taxonomy';
 import { isHttpStatus } from '../http/status';
 import { LIST_FIELD_SELECT, listFieldKey, toServerRelativeUrl, type IListFieldDef } from '../lists';
 import type { ConflictMode, IApplyResult, IDiffResult, IInstallContext, IProvider } from '../model';
@@ -14,16 +16,20 @@ const ADD_OPTIONS = AddFieldOptions.AddFieldInternalNameHint | AddFieldOptions.A
 
 interface IListFieldDiff extends IDiffResult {
   target?: IFieldInfoLike;
+  /** A new Managed Metadata column: the site column to add, or the term set a list column binds to. */
+  taxonomy?: { siteColumnId?: string; termSet?: ITargetTermSet };
 }
 
 const odataString = (s: string): string => s.replace(/'/g, "''");
 
-function isTaxonomy(type: string): boolean {
-  return type === 'TaxonomyFieldType' || type === 'TaxonomyFieldTypeMulti';
-}
-
 export class ListFieldProvider implements IProvider<IListFieldDef> {
   public readonly kind = 'listField' as const;
+  private readonly _fetch?: FetchLike;
+
+  /** `fetchImpl` is used for the CSOM requests of Managed Metadata columns (injected in tests). */
+  constructor(fetchImpl?: FetchLike) {
+    this._fetch = fetchImpl;
+  }
 
   public async diff(sp: SPFI, def: IListFieldDef, ctx: IInstallContext): Promise<IListFieldDiff> {
     throwIfAborted(ctx.signal);
@@ -41,8 +47,8 @@ export class ListFieldProvider implements IProvider<IListFieldDef> {
         const byId = await fields.filter(`Id eq guid'${def.field.id}'`).select('Id')<Array<{ Id: string }>>();
         if (byId.length) return { ref, status: 'unsupported', changes: ['idConflict'] };
       }
-      // Taxonomy columns need term store mapping (phase 2).
-      return isTaxonomy(def.field.type) ? { ref, status: 'unsupported', changes: ['taxonomy'] } : { ref, status: 'new' };
+      if (isTaxonomyType(def.field.type)) return this._taxonomyDiff(sp, def, ref);
+      return { ref, status: 'new' };
     }
     const target = byName[0];
     const changes = compareFields(resolveFieldDef(def.field, ctx.tokens), toFieldDef(target, target.SchemaXml));
@@ -56,7 +62,7 @@ export class ListFieldProvider implements IProvider<IListFieldDef> {
 
     switch (diff.status) {
       case 'new':
-        return this._create(sp, def, ctx);
+        return diff.taxonomy ? this._createTaxonomy(sp, def, diff.taxonomy, ctx) : this._create(sp, def, ctx);
       case 'same':
         ctx.log.info('List column already present; skipped.', { artifact: ref });
         return { ref, outcome: 'skipped' };
@@ -111,6 +117,54 @@ export class ListFieldProvider implements IProvider<IListFieldDef> {
       await sp.web.getList(this._listUrl(def, ctx)).fields.getById(created.Id).update({ Title: title }, 'SP.Field');
     }
     ctx.log.info(siteColumn ? 'Site column added to the list.' : 'List column created.', { artifact: ref });
+    return { ref, outcome: 'created' };
+  }
+
+  /**
+   * A new Managed Metadata column: an instance of a target site column with the same ID is added as it is;
+   * a list column needs the term set on the target (by ID, else by "Group/Set" path, spike 11).
+   */
+  private async _taxonomyDiff(sp: SPFI, def: IListFieldDef, ref: IListFieldDiff['ref']): Promise<IListFieldDiff> {
+    if (def.field.id) {
+      const site = await sp.web.availablefields.filter(`Id eq guid'${def.field.id}'`).select('Id')<Array<{ Id: string }>>();
+      if (site.length) return { ref, status: 'new', taxonomy: { siteColumnId: def.field.id } };
+    }
+    const termSet = def.field.termSet ? await resolveTargetTermSet(termStoreFor(sp), def.field.termSet) : undefined;
+    return termSet ? { ref, status: 'new', taxonomy: { termSet } } : { ref, status: 'unsupported', changes: ['termSetMissing'] };
+  }
+
+  /**
+   * Managed Metadata through CSOM only: a SchemaXml with its term store binding fails with HTTP 500 and leaves
+   * the list unusable (spike 11 B/C).
+   */
+  private async _createTaxonomy(sp: SPFI, def: IListFieldDef, taxonomy: NonNullable<IListFieldDiff['taxonomy']>, ctx: IInstallContext): Promise<IApplyResult> {
+    const ref = { kind: this.kind, key: listFieldKey(def.listKey, def.field.internalName) };
+    const listUrl = this._listUrl(def, ctx);
+    const title = resolve(def.field.title, ctx.tokens);
+    if (taxonomy.siteColumnId) {
+      await csomAddExistingField(sp, listUrl, taxonomy.siteColumnId, ctx.signal, this._fetch);
+      ctx.log.info('Site column added to the list (Managed Metadata).', { artifact: ref });
+      return { ref, outcome: 'created' };
+    }
+    const termSet = taxonomy.termSet!;
+    const created = await csomCreateTaxonomyField(
+      sp,
+      listUrl,
+      {
+        schemaXml: taxonomyFieldXml(def.field, title),
+        termStoreId: termSet.termStoreId,
+        termSetId: termSet.termSetId,
+        anchorId: def.field.termSet && def.field.termSet.anchorId,
+        open: def.field.termSet && def.field.termSet.isOpen
+      },
+      ADD_OPTIONS,
+      ctx.signal,
+      this._fetch
+    );
+    if (created.internalName && created.internalName !== def.field.internalName) {
+      ctx.log.warn(`Column was created as ${created.internalName}.`, { artifact: ref, code: 'FIELD_NAME_CHANGED' });
+    }
+    ctx.log.info(`List column created (Managed Metadata, term set found by ${termSet.matchedBy === 'id' ? 'ID' : 'path'}).`, { artifact: ref });
     return { ref, outcome: 'created' };
   }
 

@@ -15,6 +15,8 @@ const TARGET_WEB = '/sites/Cel';
 interface IViewState {
   views: { [listUrl: string]: IViewInfoLike[] };
   fields: { [viewId: string]: string[] };
+  /** Columns of the target lists; unset = every column the fixture views use exists. */
+  listColumns?: string[];
 }
 
 /** In-memory views of a web covering the REST calls CopyJet makes (spike 06 behaviour). */
@@ -24,6 +26,10 @@ function fakeViews(state: IViewState, web = SOURCE_WEB): { sp: ReturnType<typeof
     let m: RegExpExecArray | null;
     if (req.method === 'GET' && /\/_api\/web\?\$select=/i.test(req.url)) return { body: web };
     if (req.method === 'GET' && /\/_api\/web\/lists\?\$select=/i.test(req.url)) return { body: sourceLists };
+    if (req.method === 'GET' && /\/getList\('[^']+'\)\/fields\?\$select=InternalName$/i.test(req.url)) {
+      const all = state.listColumns || Object.keys(viewFields).reduce((acc: string[], k) => acc.concat(viewFields[k]), ['LinkTitle', 'DocIcon', 'LinkFilename']);
+      return { body: all.map((InternalName) => ({ InternalName })) };
+    }
     if ((m = /\/views\('([^']+)'\)\/viewfields\/removeallviewfields$/i.exec(req.url))) {
       state.fields[m[1]] = [];
       return { body: {} };
@@ -201,6 +207,20 @@ describe('ViewProvider', () => {
     expect(await provider.apply(targetSite().sp, defOf(writer, 'Rács'), 'update', c)).toMatchObject({ outcome: 'skipped' });
     const missing = { ...defOf(writer, 'Nyitott elemek'), listKey: 'Nincs', listUrl: 'Lists/Nincs' };
     expect(await provider.diff(targetSite().sp, missing, c)).toMatchObject({ status: 'unsupported', changes: ['listMissing'] });
+  });
+
+  it('leaves out view columns the target list lacks instead of failing the view', async () => {
+    const writer = await extract();
+    const target = targetSite();
+    const def = defOf(writer, 'Nyitott elemek');
+    const columns = Object.keys(viewFields).reduce((acc: string[], k) => acc.concat(viewFields[k]), ['LinkTitle']);
+    const skipped = def.view.fields[def.view.fields.length - 1];
+    target.state.listColumns = columns.filter((c) => c !== skipped);
+    const c = ctx();
+    expect(await provider.apply(target.sp, def, 'skip', c)).toMatchObject({ outcome: 'created' });
+    const created = target.state.views[LIST].filter((v) => v.Title === def.view.title)[0];
+    expect(target.state.fields[created.Id]).toEqual(def.view.fields.filter((f) => f !== skipped));
+    expect(c.log.entries.filter((e) => e.level === 'warn').map((e) => e.code)).toEqual(['VIEW_FIELD_MISSING']);
   });
 
   it('makes a template default view the default when it is created', async () => {

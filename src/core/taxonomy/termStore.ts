@@ -131,3 +131,36 @@ export function termPaths(set: ITermSetInfo, terms: ITermInfo[]): { [termId: str
   terms.forEach(pathOf);
   return out;
 }
+
+const clients = new WeakMap<SPFI, TermStoreClient>();
+
+/** One cached client per SPFI (an install talks to one target web). */
+export function termStoreFor(sp: SPFI): TermStoreClient {
+  let client = clients.get(sp);
+  if (!client) {
+    client = new TermStoreClient(sp);
+    clients.set(sp, client);
+  }
+  return client;
+}
+
+export interface ITargetTermSet {
+  termStoreId: string;
+  termSetId: string;
+  /** 'id' in the same term store, 'path' found by group/set name (another tenant). */
+  matchedBy: 'id' | 'path';
+}
+
+/**
+ * The target's term set for a template column: the same set when the store has it (same tenant), else the set
+ * at the template's "Group/Set" path (spike 11 B). Undefined when neither exists.
+ */
+export async function resolveTargetTermSet(client: TermStoreClient, termSet: { termSetId: string; path: string }): Promise<ITargetTermSet | undefined> {
+  const termStoreId = await client.storeId();
+  const byId = await client.set(termSet.termSetId);
+  if (byId) return { termStoreId, termSetId: byId.id, matchedBy: 'id' };
+  const i = termSet.path.indexOf('/');
+  if (i <= 0) return undefined;
+  const found = await client.findSet(termSet.path.slice(0, i), termSet.path.slice(i + 1));
+  return found ? { termStoreId, termSetId: found.id, matchedBy: 'path' } : undefined;
+}

@@ -78,6 +78,7 @@ declare interface ICopyJetInstallWebPartStrings {
   ReasontitleConflict: string;
   ReasonidConflict: string;
   Reasontaxonomy: string;
+  ReasontermSetMissing: string;
   ReasonnameConflict: string;
   Reasontemplate: string;
   Reasonurl: string;

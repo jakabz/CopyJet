@@ -26,10 +26,10 @@ import type { ProviderMap } from './engine';
 export function createProviders(fetchImpl?: FetchLike, items?: IItemProviderOptions): ProviderMap {
   return {
     group: new GroupProvider(fetchImpl),
-    siteField: new SiteFieldProvider(),
+    siteField: new SiteFieldProvider(fetchImpl),
     contentType: new ContentTypeProvider(fetchImpl),
     list: new ListProvider(fetchImpl),
-    listField: new ListFieldProvider(),
+    listField: new ListFieldProvider(fetchImpl),
     view: new ViewProvider(),
     items: new ItemProvider(items),
     itemLookups: new ItemLookupProvider(items),

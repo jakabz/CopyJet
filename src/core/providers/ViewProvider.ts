@@ -2,6 +2,7 @@ import type { SPFI } from '@pnp/sp';
 import '@pnp/sp/webs';
 import '@pnp/sp/lists';
 import '@pnp/sp/views';
+import '@pnp/sp/fields';
 import { CopyJetError, throwIfAborted } from '../errors';
 import { isHttpStatus } from '../http/status';
 import {
@@ -98,10 +99,21 @@ export class ViewProvider implements IProvider<IListViewDef> {
   /** Applies the given changes to a view: fields replaced in template order, the rest in one MERGE. */
   private async _configure(sp: SPFI, def: IListViewDef, viewId: string, changes: string[], ctx: IInstallContext): Promise<void> {
     const view = this._resolved(def.view, ctx);
-    const target = sp.web.getList(this._listUrl(def, ctx)).views.getById(viewId);
+    const list = sp.web.getList(this._listUrl(def, ctx));
+    const target = list.views.getById(viewId);
     if (changes.indexOf('fields') >= 0) {
+      // A column the install skipped (e.g. Managed Metadata without its term set) would fail the whole view.
+      const existing = (await list.fields.select('InternalName')<Array<{ InternalName: string }>>()).map((f) => f.InternalName);
+      const missing = view.fields.filter((f) => existing.indexOf(f) < 0);
+      if (missing.length) {
+        ctx.log.warn(`View columns not on the target list are left out: ${missing.join(', ')}.`, {
+          artifact: { kind: this.kind, key: viewKey(def.listKey, def.view.title) },
+          code: 'VIEW_FIELD_MISSING',
+          detail: missing
+        });
+      }
       await target.fields.removeAll();
-      for (const f of view.fields) {
+      for (const f of view.fields.filter((x) => missing.indexOf(x) < 0)) {
         throwIfAborted(ctx.signal);
         await target.fields.add(f);
       }

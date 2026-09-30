@@ -2,7 +2,9 @@ import type { SPFI } from '@pnp/sp';
 import '@pnp/sp/webs';
 import '@pnp/sp/fields';
 import { CopyJetError, throwIfAborted } from '../errors';
-import { compareFields, fieldUpdate, resolveFieldDef, sanitizeFieldXml, toFieldDef, type IFieldInfoLike } from '../fields';
+import { compareFields, fieldUpdate, isTaxonomyType, resolveFieldDef, sanitizeFieldXml, taxonomyFieldXml, toFieldDef, type IFieldInfoLike } from '../fields';
+import { csomCreateTaxonomyField, type FetchLike } from '../http/csom';
+import { resolveTargetTermSet, termStoreFor, type ITargetTermSet } from '../taxonomy';
 import type { ConflictMode, IApplyResult, IDiffResult, IField, IInstallContext, IProvider } from '../model';
 import { resolve } from '../tokenizer';
 
@@ -13,18 +15,22 @@ const ADD_FIELD_INTERNAL_NAME_HINT = 8;
 
 interface ISiteFieldDiff extends IDiffResult {
   target?: IFieldInfoLike;
+  /** A new Managed Metadata column: the target term set it binds to. */
+  termSet?: ITargetTermSet;
 }
 
 const odataString = (s: string): string => s.replace(/'/g, "''");
 
 const refOf = (def: IField): IDiffResult['ref'] => ({ kind: 'siteField', key: `field:${def.internalName}` });
 
-function isTaxonomy(def: IField): boolean {
-  return def.type === 'TaxonomyFieldType' || def.type === 'TaxonomyFieldTypeMulti';
-}
-
 export class SiteFieldProvider implements IProvider<IField> {
   public readonly kind = 'siteField' as const;
+  private readonly _fetch?: FetchLike;
+
+  /** `fetchImpl` is used for the CSOM request that creates Managed Metadata columns (injected in tests). */
+  constructor(fetchImpl?: FetchLike) {
+    this._fetch = fetchImpl;
+  }
 
   public async diff(sp: SPFI, def: IField, ctx: IInstallContext): Promise<ISiteFieldDiff> {
     throwIfAborted(ctx.signal);
@@ -39,8 +45,12 @@ export class SiteFieldProvider implements IProvider<IField> {
       if (def.id && (await this._idTaken(sp, def.id))) {
         return { ref, status: 'unsupported', changes: ['idConflict'] };
       }
-      // Taxonomy columns need term store mapping (phase 2); creating them unbound would leave them unusable.
-      return { ref, status: isTaxonomy(def) ? 'unsupported' : 'new', changes: isTaxonomy(def) ? ['taxonomy'] : undefined };
+      if (isTaxonomyType(def.type)) {
+        // Unbound it would be unusable: created only when the target has the term set (spike 11).
+        const termSet = def.termSet ? await resolveTargetTermSet(termStoreFor(sp), def.termSet) : undefined;
+        return termSet ? { ref, status: 'new', termSet } : { ref, status: 'unsupported', changes: ['termSetMissing'] };
+      }
+      return { ref, status: 'new' };
     }
 
     const target = byName[0];
@@ -56,7 +66,7 @@ export class SiteFieldProvider implements IProvider<IField> {
 
     switch (diff.status) {
       case 'new':
-        return this._create(sp, def, ctx);
+        return diff.termSet ? this._createTaxonomy(sp, def, diff.termSet, ctx) : this._create(sp, def, ctx);
       case 'same':
         return this._done(ref, 'skipped', def, diff.target!.Id, ctx);
       case 'different':
@@ -100,6 +110,25 @@ export class SiteFieldProvider implements IProvider<IField> {
     }
     ctx.log.info('Site column created.', { artifact: ref });
     return this._done(ref, 'created', def, created.Id, ctx);
+  }
+
+  /** Managed Metadata: CSOM, plain field + term store binding in one request (spike 11 C2). */
+  private async _createTaxonomy(sp: SPFI, def: IField, termSet: ITargetTermSet, ctx: IInstallContext): Promise<IApplyResult> {
+    const ref = refOf(def);
+    const title = resolve(def.title, ctx.tokens);
+    const created = await csomCreateTaxonomyField(
+      sp,
+      undefined,
+      { schemaXml: taxonomyFieldXml(def, title), termStoreId: termSet.termStoreId, termSetId: termSet.termSetId, anchorId: def.termSet && def.termSet.anchorId, open: def.termSet && def.termSet.isOpen },
+      ADD_FIELD_INTERNAL_NAME_HINT,
+      ctx.signal,
+      this._fetch
+    );
+    if (created.internalName && created.internalName !== def.internalName) {
+      ctx.log.warn(`Column was created as ${created.internalName}.`, { artifact: ref, code: 'FIELD_NAME_CHANGED' });
+    }
+    ctx.log.info(`Site column created (Managed Metadata, term set found by ${termSet.matchedBy === 'id' ? 'ID' : 'path'}).`, { artifact: ref });
+    return this._done(ref, 'created', def, created.id, ctx);
   }
 
   private async _update(sp: SPFI, def: IField, diff: ISiteFieldDiff, ctx: IInstallContext): Promise<IApplyResult> {

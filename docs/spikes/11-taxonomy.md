@@ -1,6 +1,6 @@
 # Spike 11 – Managed Metadata oszlopok és termek
 
-Állapot: **lezárva (azonos tenant)** · Érintett kód (2. fázis): lista- és site-oszlopok (`TaxonomyFieldType`), `FieldValueSerializer`, `TermMapper`, Install `MappingStep`
+Állapot: **lezárva** · Érintett kód (2. fázis): lista- és site-oszlopok (`TaxonomyFieldType`), `FieldValueSerializer`, `TermMapper`, Install `MappingStep`
 
 ## Kérdések
 
@@ -378,4 +378,13 @@ Mindkettőnél megnézi, hogy létrejött-e az oszlop és a rejtett segédoszlop
   - a címke és az útvonal a termtárból jön a `TermGuid` alapján, nem a REST `Label`-ből;
   - az útvonalhoz a `children` hívásokon kell végigmenni, mert a lapos lista nem adja a szülőt.
 
-Állapot: **lezárva az azonos tenantban**, a másik tenant C-eredménye és a valódi telepítés ellenőrzi.
+### C – eredmény, másik tenant (2026-09-30)
+
+Ugyanaz, mint az azonos tenantban:
+- a C1 (teljes XML) 500-at ad, és tönkreteszi a listát;
+- a C2 (CSOM) működik egy- és többértékű oszlopra is, a rejtett jegyzetoszlopot és a TaxonomyHiddenList-kötést a SharePoint hozza létre;
+- a `Címke|GUID` alak helyes, a `-1;#…` és az ismeretlen GUID mezőszintű hibát ad.
+
+A termkészletet a másik tenantban név szerint (csoport → termkészlet) találta meg, a termek GUID-ja ott más.
+
+Állapot: **lezárva** – mindkét tenantban igazolva; a valódi telepítés ellenőrzi.

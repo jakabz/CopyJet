@@ -79,6 +79,7 @@ define([], function() {
     "ReasontitleConflict": "ezzel a címmel már van egy másik lista",
     "ReasonidConflict": "az azonosítót egy másik oszlop használja",
     "Reasontaxonomy": "Managed Metadata oszlop – a 2. fázisban",
+    "ReasontermSetMissing": "a termkészlet (csoport/termkészlet) nincs meg a célon – a Managed Metadata oszlop nem jön létre",
     "ReasonnameConflict": "ezzel a névvel már van egy másik tartalomtípus",
     "Reasontemplate": "eltérő listatípus a célon",
     "Reasonurl": "ezen az URL-en a lista nem hozható létre",
