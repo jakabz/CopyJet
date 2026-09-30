@@ -22,6 +22,7 @@ import {
   type IListContentTypes,
   siteContentTypeIdOf,
   toServerRelativeUrl,
+  toSiteRelativeUrl,
   urlLeaf,
   type IListInfoLike
 } from '../lists';
@@ -43,6 +44,11 @@ function creatableUrl(template: number, leaf: string): string | undefined {
 /** Additive structure changes 'update' mode (and creation) apply; see _syncStructure. */
 const STRUCTURE_CHANGES = ['contentTypes', 'contentTypeOrder', 'folders'];
 
+/** The source site's default document library travels as "Shared Documents"; the target's may live elsewhere. */
+export function isDefaultLibrary(def: IList): boolean {
+  return def.template === DOCUMENT_LIBRARY && def.url.toLowerCase() === 'shared documents';
+}
+
 export class ListProvider implements IProvider<IList> {
   public readonly kind = 'list' as const;
   private readonly _fetch?: FetchLike;
@@ -58,7 +64,7 @@ export class ListProvider implements IProvider<IList> {
     if (!isSupportedTemplate(def.template)) {
       return { ref, status: 'unsupported', changes: ['template'] };
     }
-    const target = await this._get(sp, def.url, ctx);
+    const target = (await this._get(sp, def.url, ctx)) || (isDefaultLibrary(def) ? await this._defaultLibrary(sp) : undefined);
     throwIfAborted(ctx.signal);
 
     if (!target) {
@@ -76,6 +82,8 @@ export class ListProvider implements IProvider<IList> {
     if (changes.indexOf('template') >= 0) {
       return { ref, status: 'unsupported', changes: ['template'], target };
     }
+    // Known now, so the preview of the list's columns, views and content looks in the right place too.
+    this._register(def, target, ctx);
     changes.push(...(await this._structureChanges(sp, def, target.RootFolder.ServerRelativeUrl)));
     return { ref, status: changes.length ? 'different' : 'same', changes: changes.length ? changes : undefined, target };
   }
@@ -95,7 +103,7 @@ export class ListProvider implements IProvider<IList> {
         if (mode === 'update') {
           const settings = (diff.changes || []).filter((c) => STRUCTURE_CHANGES.indexOf(c) < 0);
           if (settings.length) {
-            await sp.web.getList(this._serverUrl(def.url, ctx)).update(listUpdateProps(def, settings));
+            await sp.web.getList(diff.target!.RootFolder.ServerRelativeUrl).update(listUpdateProps(def, settings));
           }
           await this._syncStructure(sp, def, diff.target!.RootFolder.ServerRelativeUrl, ctx);
           ctx.log.info(`List updated: ${(diff.changes || []).join(', ')}.`, { artifact: ref });
@@ -242,10 +250,35 @@ export class ListProvider implements IProvider<IList> {
     return found.length > 0;
   }
 
-  private _done(ref: IApplyResult['ref'], outcome: IApplyResult['outcome'], def: IList, target: IListInfoLike, ctx: IInstallContext): IApplyResult {
+  /**
+   * The web's default document library. Every site has one, but its URL and title depend on the site type and
+   * language (Shared Documents, Documents …): the template's default library is matched to it (installed
+   * across tenants 2026-09-30, "titleConflict").
+   */
+  private async _defaultLibrary(sp: SPFI): Promise<IListInfoLike | undefined> {
+    try {
+      return await sp.web.defaultDocumentLibrary.select(...LIST_SELECT).expand('RootFolder')<IListInfoLike>();
+    } catch (e) {
+      if (isHttpStatus(e, 404)) return undefined;
+      throw e;
+    }
+  }
+
+  /** Registers {listkey:K} and {listurl:K} with the list actually found or created (its URL may differ from the template's). */
+  private _register(def: IList, target: IListInfoLike, ctx: IInstallContext): { id: string; url: string } {
     const id = target.Id.replace(/^\{|\}$/g, '').toLowerCase();
+    const web = ctx.tokens.get('siterelative');
+    const url = web !== undefined && target.RootFolder ? toSiteRelativeUrl(target.RootFolder.ServerRelativeUrl, web) : def.url;
     ctx.tokens.set('listkey', def.key, id);
-    ctx.tokens.set('listurl', def.key, def.url);
-    return { ref, outcome, tokens: { listkey: { [def.key]: id }, listurl: { [def.key]: def.url } } };
+    ctx.tokens.set('listurl', def.key, url);
+    return { id, url };
+  }
+
+  private _done(ref: IApplyResult['ref'], outcome: IApplyResult['outcome'], def: IList, target: IListInfoLike, ctx: IInstallContext): IApplyResult {
+    const { id, url } = this._register(def, target, ctx);
+    if (url.toLowerCase() !== def.url.toLowerCase() && outcome !== 'created') {
+      ctx.log.info(`Installed into the existing list at ${url}.`, { artifact: ref, code: 'LIST_MATCHED', detail: { template: def.url, target: url } });
+    }
+    return { ref, outcome, tokens: { listkey: { [def.key]: id }, listurl: { [def.key]: url } } };
   }
 }

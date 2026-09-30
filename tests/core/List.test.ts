@@ -29,6 +29,8 @@ interface ISiteState {
   cts: { [listUrl: string]: { ordered: string[]; all: string[] } };
   /** Site content types that can be added to lists. */
   siteCts: string[];
+  /** Server-relative URL of the web's default document library. */
+  defaultLibrary?: string;
 }
 
 const guid32 = (n: number): string => n.toString(16).toUpperCase().padStart(32, '0');
@@ -50,6 +52,10 @@ function fakeSite(state: ISiteState): { sp: ReturnType<typeof createMockSp>['sp'
     }
     if (req.method === 'GET' && /\/_api\/web\?\$select=/i.test(req.url)) return { body: state.web };
     if (req.method === 'GET' && /\/_api\/web\/lists\?\$select=/i.test(req.url)) return { body: state.lists };
+    if (req.method === 'GET' && /\/_api\/web\/defaultDocumentLibrary\?\$select=/i.test(req.url)) {
+      const lib = state.defaultLibrary ? findList(state.defaultLibrary) : undefined;
+      return lib ? { body: lib } : { status: 404, body: {} };
+    }
     if ((m = /\/getFolderByServerRelativePath\(decodedUrl='([^']+)'\)\/folders/i.exec(req.url))) {
       const path = m[1];
       const listUrl = listOfPath(path)!;
@@ -372,6 +378,23 @@ describe('ListProvider', () => {
     expect(await provider.diff(targetSite().sp, nested, c)).toMatchObject({ status: 'unsupported', changes: ['url'] });
     expect(await provider.apply(targetSite().sp, nested, 'update', c)).toMatchObject({ outcome: 'skipped' });
     expect(c.tokens.get('listkey', 'Teszt_lista')).toBeUndefined();
+  });
+
+  it('matches the default document library wherever the target keeps it (cross-tenant install, 2026-09-30)', async () => {
+    const { lists } = await extractAll();
+    const docs = lists.filter((l) => l.url === 'Shared Documents')[0];
+    // The target's default library lives at Documents under the same title: no Shared Documents, title taken.
+    const target = targetSite([{ ...documents, Id: 'dddddddd-0000-4000-8000-000000000001', RootFolder: { ServerRelativeUrl: '/sites/Forras/Documents' } }]);
+    target.state.defaultLibrary = `${TARGET_WEB}/Documents`;
+    const c = ctx();
+    const diff = await provider.diff(target.sp, docs, c);
+    expect(diff.status).not.toBe('unsupported');
+    await provider.apply(target.sp, docs, 'skip', c);
+    // Columns, views and files of the template's library now go to Documents.
+    expect(c.tokens.get('listurl', docs.key)).toBe('Documents');
+    expect(c.tokens.get('listkey', docs.key)).toBe('dddddddd-0000-4000-8000-000000000001');
+    expect(c.log.entries.map((e) => e.code)).toContain('LIST_MATCHED');
+    expect(target.lists.length).toBe(1);
   });
 
   it('fails with LIST_URL_MISMATCH when SharePoint puts the list elsewhere', async () => {
