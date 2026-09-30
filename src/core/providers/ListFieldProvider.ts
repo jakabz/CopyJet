@@ -47,7 +47,7 @@ export class ListFieldProvider implements IProvider<IListFieldDef> {
         const byId = await fields.filter(`Id eq guid'${def.field.id}'`).select('Id')<Array<{ Id: string }>>();
         if (byId.length) return { ref, status: 'unsupported', changes: ['idConflict'] };
       }
-      if (isTaxonomyType(def.field.type)) return this._taxonomyDiff(sp, def, ref);
+      if (isTaxonomyType(def.field.type)) return this._taxonomyDiff(sp, def, ref, ctx);
       return { ref, status: 'new' };
     }
     const target = byName[0];
@@ -124,12 +124,12 @@ export class ListFieldProvider implements IProvider<IListFieldDef> {
    * A new Managed Metadata column: an instance of a target site column with the same ID is added as it is;
    * a list column needs the term set on the target (by ID, else by "Group/Set" path, spike 11).
    */
-  private async _taxonomyDiff(sp: SPFI, def: IListFieldDef, ref: IListFieldDiff['ref']): Promise<IListFieldDiff> {
+  private async _taxonomyDiff(sp: SPFI, def: IListFieldDef, ref: IListFieldDiff['ref'], ctx: IInstallContext): Promise<IListFieldDiff> {
     if (def.field.id) {
       const site = await sp.web.availablefields.filter(`Id eq guid'${def.field.id}'`).select('Id')<Array<{ Id: string }>>();
       if (site.length) return { ref, status: 'new', taxonomy: { siteColumnId: def.field.id } };
     }
-    const termSet = def.field.termSet ? await resolveTargetTermSet(termStoreFor(sp), def.field.termSet) : undefined;
+    const termSet = def.field.termSet ? await resolveTargetTermSet(termStoreFor(sp, ctx), def.field.termSet) : undefined;
     return termSet ? { ref, status: 'new', taxonomy: { termSet } } : { ref, status: 'unsupported', changes: ['termSetMissing'] };
   }
 

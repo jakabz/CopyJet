@@ -4,6 +4,7 @@ import { throwIfAborted } from '../errors';
 import { readAssociatedGroups } from '../groups';
 import type { Logger } from '../logger/Logger';
 import type { PrincipalMapper } from '../mapping/PrincipalMapper';
+import type { TermMapper } from '../mapping/TermMapper';
 import type { IInstallContext, ITemplateReader } from '../model';
 import { TokenContext } from '../tokenizer';
 
@@ -11,6 +12,7 @@ import { TokenContext } from '../tokenizer';
 export interface IInstallContent {
   reader: ITemplateReader;
   principals: PrincipalMapper;
+  terms?: TermMapper;
 }
 
 /**
@@ -29,6 +31,6 @@ export async function createInstallContext(sp: SPFI, log: Logger, signal?: Abort
   if (associated.member !== undefined) tokens.set('associatedmembergroup', undefined, String(associated.member));
   if (associated.visitor !== undefined) tokens.set('associatedvisitorgroup', undefined, String(associated.visitor));
   const ctx: IInstallContext = { targetSiteUrl: web.Url, tokens, log, signal };
-  if (content) ctx.content = { reader: content.reader, principals: content.principals, idMaps: {} };
+  if (content) ctx.content = { reader: content.reader, principals: content.principals, terms: content.terms, idMaps: {} };
   return ctx;
 }

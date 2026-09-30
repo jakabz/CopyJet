@@ -388,3 +388,13 @@ Ugyanaz, mint az azonos tenantban:
 A termkészletet a másik tenantban név szerint (csoport → termkészlet) találta meg, a termek GUID-ja ott más.
 
 Állapot: **lezárva** – mindkét tenantban igazolva; a valódi telepítés ellenőrzi.
+
+### Valódi telepítés (2026-09-30, 1.5.4.0–1.5.7.0)
+
+- **Oszlopok:** azonos tenantban „term set found by ID”, a másik tenantban „by path”. Átnevezett termkészletnél mindkét oszlop kimaradt (`termSetMissing`), félkész oszlop nem jött létre.
+  - Ekkor a nézet a hiányzó oszlop miatt elbukott, ezt az 1.5.5.0 javította (`VIEW_FIELD_MISSING`).
+- **Értékek:** mindkét tenantban helyesek (AAA: Pénzügy, VVV: Logisztika és Raktár). A másik tenantban a saját termjeikkel, útvonal szerint leképezve. A Leképezés lépés „Egyezik”, illetve „Útvonal szerint” állapotot mutatott.
+- **Törölt term (Raktár, másik tenant):** az 1.5.6.0 még beírta, mert a termtár-kliens gyorsítótára az egész oldalbetöltésre szólt, és a korábbi telepítés termlistáját használta.
+  - Az 1.5.7.0-tól a gyorsítótár futásonként (telepítés, előnézet, sablonbetöltés) külön él, és a telepítés mindig frissen képez le.
+  - Ezzel a Leképezés lépés „Hiányzik a célon” állapotot mutatott, a naplóban `TERM_NOT_FOUND` jelent meg, és az elem a Raktár nélkül (csak Logisztika) jött létre.
+

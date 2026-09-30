@@ -202,7 +202,7 @@ A `tokenizer` teszi hordozhatóvá a sablont: kiolvasáskor a forrás site-ra je
 **`mapping`**
 
 - `PrincipalMapper` – stratégiák sorrendben: kézi választás (a Leképezés táblázatában) → feltöltött CSV (`forrás;cél`, `parseMappingCsv`) → azonos fiók → azonos e-mail → domaincsere (`@forras.hu` → `@cel.hu`, e-mailre és claims loginra, `replaceDomain`) → helyettesítő felhasználó → üres. A kézi választás és a CSV azért áll elöl, mert kifejezett döntés. Találatnál `web.ensureUser()`, értékenként egyszer, gyorsítótárban; a szabályok változása mindenkit újra leképez. Naplókódok: `PRINCIPAL_FALLBACK`, `PRINCIPAL_NOT_FOUND`. Opcionálisan `@pnp/graph` a felhasználó létezésének előzetes ellenőrzésére.
-- `TermMapper` – azonos tenantnál GUID szerint; más tenantnál `termcsoport / termkészlet / címke-útvonal` alapján a PnPjs `taxonomy` API-val. Hiány → figyelmeztetés az előnézetben.
+- `TermMapper` – azonos tenantnál GUID szerint; más tenantnál `termcsoport / termkészlet / címke-útvonal` alapján, a `_api/v2.1/termStore`-ral (`core/taxonomy`, a PnPjs 4-ben nincs taxonómia-modul; a hívások a web viselkedéseivel mennek). Az értékek a cél term saját címkéjével íródnak (`Címke|GUID`, többnél `;`); a nem talált term kimarad (ismeretlen GUID az egész elemet elbuktatná), figyelmeztetéssel a Leképezés lépésben és a naplóban (`TERM_NOT_FOUND`). Managed Metadata oszlop csak CSOM-mal jön létre (`AddFieldAsXml` egyszerű mezővel, utána `SspId`/`TermSetId`), mert a `Customization`-ös XML HTTP 500-at ad és tönkreteszi a listát (`docs/spikes/11`).
 - `IdMap` – listánkénti `Map<number, number>` (forrás → cél elem-ID), a lookup-feloldáshoz; a `state` menti.
 
 ## 6. Core: extractorok
@@ -439,7 +439,7 @@ A fejlesztés a rendszerterv fázisait követi; minden fázis végén működő,
 - [x] `ItemExtractor` / `ItemProvider`, mellékletek, `IdMap`, lookup második kör (`ItemLookupProvider`), `PrincipalMapper` alap (azonos login → azonos e-mail); felület: Setup listánként „Szerkezet + tartalom”, szerzők megőrzése, automatikus `.zip`, lookup-céllisták tartalmának felajánlása; Install `.zip` betöltés, felhasználó-keresés a Leképezés lépésben – valódi Forrás → Cél telepítéssel igazolva 2026-09-25-én (`docs/spikes/08`, `09`)
 - [x] `FileExtractor` / `FileProvider`, chunked upload, opcionális verziók (`docs/spikes/10`; felület: tárak „Szerkezet + tartalom”, verziókapcsoló, max. fájlméret) – valódi telepítéssel ellenőrizendő; a hivatkozásos mód (`createCopyJobs`) a 4. fázisban
 - [x] `packager` – `.zip`, checksum (`ZipTemplateWriter`, bejegyzések sémavalidálása, útvonal-ellenőrzés; `meta.checksum` = SHA-256 bejegyzésenként, útvonal szerint rendezett listából, a manifest a `checksum` nélkül; `meta.estimatedSizeBytes`; az Install betöltéskor ellenőrzi, eltérésnél figyelmeztet)
-- [ ] `mapping`: `PrincipalMapper`, `TermMapper`, Install `MappingStep` – kész: `PrincipalMapper` minden stratégiával (kézi, CSV, azonos fiók/e-mail, domaincsere, helyettesítő) és a `MappingStep` felhasználói része a mockup szerint, másik tenantba telepítéssel igazolva 2026-09-30-án; hátra van: Managed Metadata oszlopok és a `TermMapper` (előtte spike)
+- [x] `mapping`: `PrincipalMapper`, `TermMapper`, Install `MappingStep` – felhasználók: kézi, CSV, azonos fiók/e-mail, domaincsere, helyettesítő (másik tenantba telepítéssel igazolva 2026-09-30); Managed Metadata: oszlopok CSOM-mal, termkészlet azonosító vagy „csoport/termkészlet” útvonal szerint, értékek `Címke|GUID` alakban, termek azonosító vagy címke-útvonal szerint (`docs/spikes/11`)
 
 **3. fázis – Lapok és navigáció**
 

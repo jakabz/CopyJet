@@ -135,6 +135,12 @@ declare interface ICopyJetInstallWebPartStrings {
   MapSameLogin: string;
   MapSameEmail: string;
   MapNotFound: string;
+  TermsMapped: string;
+  TermsChecking: string;
+  TermsMissingNote: string;
+  TermSame: string;
+  TermByPath: string;
+  TermMissing: string;
   UsersMapped: string;
   DomainReplace: string;
   CsvImport: string;
@@ -154,7 +160,6 @@ declare interface ICopyJetInstallWebPartStrings {
   FallbackLabel: string;
   FallbackEmpty: string;
   FallbackUser: string;
-  TermsLater: string;
   ReasontargetHasItems: string;
   LogTitle: string;
   LogAll: string;

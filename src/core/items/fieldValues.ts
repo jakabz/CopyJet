@@ -186,6 +186,8 @@ export interface IToTargetContext {
   localTime(utcIso: string): string;
   /** Source lookup IDs → target IDs; unknown ones are dropped. */
   lookupIds?(field: IItemField, sourceIds: number[]): number[];
+  /** Template term keys → target terms; unmapped ones are dropped (an unknown GUID fails the item, spike 11 C). */
+  termValues?(keys: string[]): Array<{ termId: string; label: string }>;
 }
 
 /** Target lookup IDs → form value. Multi lookups need the empty value part: "1;#;#2" ("1;#2" silently keeps only the first, spike 08 E). */
@@ -245,6 +247,15 @@ export function toTargetValue(field: IItemField, value: FieldValue, ctx: IToTarg
     case 'lookupMulti': {
       const ids = (value as { lookup?: number[] }).lookup || [];
       return lookupValue(field, ctx.lookupIds ? ctx.lookupIds(field, ids) : []);
+    }
+    case 'taxonomy':
+    case 'taxonomyMulti': {
+      const keys = (value as { terms?: string[] }).terms || [];
+      const terms = ctx.termValues ? ctx.termValues(keys) : [];
+      if (!terms.length) return undefined;
+      // "Label|GUID"; several separated by ";" ("-1;#Label|GUID" is refused, spike 11 C).
+      const text = (t: { termId: string; label: string }): string => `${t.label.replace(/[;|]/g, ' ')}|${t.termId}`;
+      return field.kind === 'taxonomy' ? text(terms[0]) : terms.map(text).join(';');
     }
     default:
       return undefined;

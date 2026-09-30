@@ -132,14 +132,17 @@ export function termPaths(set: ITermSetInfo, terms: ITermInfo[]): { [termId: str
   return out;
 }
 
-const clients = new WeakMap<SPFI, TermStoreClient>();
+const clients = new WeakMap<object, TermStoreClient>();
 
-/** One cached client per SPFI (an install talks to one target web). */
-export function termStoreFor(sp: SPFI): TermStoreClient {
-  let client = clients.get(sp);
+/**
+ * One cached client per run: `scope` is the install context (or the preview's), so a later install in the same
+ * page never reuses a stale term list – a term deleted in between must be seen as missing (2026-09-30).
+ */
+export function termStoreFor(sp: SPFI, scope: object): TermStoreClient {
+  let client = clients.get(scope);
   if (!client) {
     client = new TermStoreClient(sp);
-    clients.set(sp, client);
+    clients.set(scope, client);
   }
   return client;
 }

@@ -16,6 +16,7 @@ import {
   principalKeysOf,
   readTargetFields,
   readWebLocale,
+  termKeysOf,
   toTargetValue,
   warnMissingFields,
   webLocalTime,
@@ -91,6 +92,8 @@ export class FileProvider implements IProvider<IListFilesDef> {
     const times = webLocalTime(sp);
     await times.prepare(dateValuesOf(items, fields, 'all').concat(dateValuesOf(versionItems, {}, 'modified')), ctx.signal);
     await content.principals.map(principalKeysOf(items.concat(versionItems), fields), ctx.tokens, ctx.log, ctx.signal);
+    const terms = content.terms;
+    if (terms) await terms.map(termKeysOf(items, fields), ctx.log, ctx.signal);
     await this._ensureFolders(sp, listUrl, todo, ref, ctx);
     const contentTypes = await readListContentTypes(sp, listUrl);
     const idMap = (content.idMaps[def.listKey] = content.idMaps[def.listKey] || {});
@@ -110,7 +113,7 @@ export class FileProvider implements IProvider<IListFilesDef> {
           if (!map) unresolved[name] = true;
           else v = lookupValue(field, ((value as { lookup?: number[] } | null)?.lookup || []).map((id) => map[id]).filter((id) => !!id));
         } else {
-          v = toTargetValue(field, value, { locale, tokens: ctx.tokens, localTime: (iso) => times.local(iso) });
+          v = toTargetValue(field, value, { locale, tokens: ctx.tokens, localTime: (iso) => times.local(iso), termValues: (keys) => (terms ? terms.resolved(keys) : []) });
         }
         if (v !== undefined) values.push({ FieldName: name, FieldValue: v });
       });

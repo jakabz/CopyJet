@@ -156,3 +156,16 @@ export function warnMissingFields(items: Array<{ values: { [name: string]: Field
     ctx.log.warn(`Column ${name} is not a writable column of the target list; its values are skipped.`, { artifact: ref, code: 'ITEM_FIELD_MISSING', detail: name })
   );
 }
+
+/** Template term keys used by the Managed Metadata values of these items (for TermMapper.map). */
+export function termKeysOf(items: Array<{ values: { [name: string]: FieldValue } }>, fields: { [name: string]: ITargetField }): string[] {
+  const keys: { [k: string]: boolean } = {};
+  items.forEach((item) =>
+    Object.keys(item.values).forEach((name) => {
+      const f = fields[name];
+      const v = item.values[name] as { terms?: string[] } | null;
+      if (f && (f.kind === 'taxonomy' || f.kind === 'taxonomyMulti') && v && v.terms) v.terms.forEach((k) => (keys[k] = true));
+    })
+  );
+  return Object.keys(keys);
+}

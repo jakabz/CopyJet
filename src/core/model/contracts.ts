@@ -4,6 +4,7 @@ import type { ICopyJetTemplate } from './generated/copyjet.v1';
 import type { TokenContext } from '../tokenizer/TokenContext';
 import type { Logger } from '../logger/Logger';
 import type { PrincipalMapper } from '../mapping/PrincipalMapper';
+import type { TermMapper } from '../mapping/TermMapper';
 
 /** Receives extracted data; hides the package format (.json / .zip) from the extractors. */
 export interface ITemplateWriter {
@@ -78,6 +79,8 @@ export interface IContentContext {
   idMaps: { [listKey: string]: { [sourceId: number]: number } };
   /** Template principals → target users ({principal:key} tokens). */
   principals: PrincipalMapper;
+  /** Template terms → target terms (Managed Metadata values); without it those values are not written. */
+  terms?: TermMapper;
 }
 
 export interface IInstallContext {

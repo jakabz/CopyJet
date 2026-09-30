@@ -47,7 +47,7 @@ export class SiteFieldProvider implements IProvider<IField> {
       }
       if (isTaxonomyType(def.type)) {
         // Unbound it would be unusable: created only when the target has the term set (spike 11).
-        const termSet = def.termSet ? await resolveTargetTermSet(termStoreFor(sp), def.termSet) : undefined;
+        const termSet = def.termSet ? await resolveTargetTermSet(termStoreFor(sp, ctx), def.termSet) : undefined;
         return termSet ? { ref, status: 'new', termSet } : { ref, status: 'unsupported', changes: ['termSetMissing'] };
       }
       return { ref, status: 'new' };
