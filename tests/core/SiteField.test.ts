@@ -44,6 +44,10 @@ function targetSite(initial: IFieldInfoLike[] = []): { sp: ReturnType<typeof cre
   const fields = initial.map((f) => ({ ...f }));
   let seq = 0;
   const { sp, requests } = createMockSp((req) => {
+    // An empty term store: the template's term set is neither there by ID nor by path.
+    if (/\/_api\/v2\.1\/termStore\?\$select=id$/i.test(req.url)) return { body: { id: 'ffffffff-0000-4000-8000-000000000000' } };
+    if (/\/_api\/v2\.1\/termStore\/sets\//i.test(req.url)) return { status: 404, body: {} };
+    if (/\/_api\/v2\.1\/termStore\/groups\?/i.test(req.url)) return { body: { value: [] } };
     const byName = /availablefields\?\$filter=InternalName eq '([^']+)'/.exec(req.url);
     if (req.method === 'GET' && byName) {
       return { body: fields.filter((f) => f.InternalName === byName[1]) };
@@ -179,8 +183,8 @@ describe('SiteFieldProvider', () => {
 
     expect(await provider.apply(target.sp, calculated, 'skip', ctx)).toMatchObject({ outcome: 'created' });
 
-    // Taxonomy needs term mapping (phase 2): reported, not created.
-    expect((await provider.diff(target.sp, taxonomy, ctx)).status).toBe('unsupported');
+    // Managed Metadata without its term set on the target: reported, never created unbound (spike 11).
+    expect(await provider.diff(target.sp, taxonomy, ctx)).toMatchObject({ status: 'unsupported', changes: ['termSetMissing'] });
     expect(await provider.apply(target.sp, taxonomy, 'update', ctx)).toMatchObject({ outcome: 'skipped' });
     expect(target.fields.map((f) => f.InternalName)).toEqual(['CJ_Status', 'CJ_Ugyfel', 'CJ_Keret']);
   });

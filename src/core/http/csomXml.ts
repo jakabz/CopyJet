@@ -123,3 +123,64 @@ export function setGroupOwnerBody(groupId: number, ownerGroupId: number): ICsomB
       `<Method Id="5" ParentId="3" Name="GetById"><Parameters><Parameter Type="Int32">${Math.floor(ownerGroupId)}</Parameter></Parameters></Method>`
   };
 }
+
+/** Query id whose response element carries the created or added field (Id, InternalName, Title). */
+export const FIELD_QUERY_ID = 20;
+
+const fieldQuery = (objectPathId: number): string =>
+  `<Query Id="${FIELD_QUERY_ID}" ObjectPathId="${objectPathId}"><Query SelectAllProperties="false"><Properties>` +
+  '<Property Name="Id" ScalarProperty="true" /><Property Name="InternalName" ScalarProperty="true" /><Property Name="Title" ScalarProperty="true" />' +
+  '</Properties></Query></Query>';
+
+/** Web.GetList(url).Fields, or Web.Fields without a list: object path 4. */
+const fieldsPath = (listUrl: string | undefined): string =>
+  listUrl
+    ? `<Method Id="3" ParentId="2" Name="GetList"><Parameters><Parameter Type="String">${escapeXml(listUrl)}</Parameter></Parameters></Method><Property Id="4" ParentId="3" Name="Fields" />`
+    : '<Property Id="4" ParentId="2" Name="Fields" />';
+
+export interface ITaxonomyFieldSpec {
+  /** A plain field element (Type, ID, Name, DisplayName, ShowField, Mult …) without Customization. */
+  schemaXml: string;
+  termStoreId: string;
+  termSetId: string;
+  anchorId?: string;
+  open?: boolean;
+}
+
+const guidParam = (id: string): string => `<Parameter Type="Guid">{${escapeXml(id.replace(/[{}]/g, ''))}}</Parameter>`;
+
+/**
+ * A Managed Metadata column (spike 11 C2): Fields.AddFieldAsXml(plain field), then SspId / TermSetId /
+ * AnchorId / Open on the same object and Update() – one request. SharePoint adds the hidden note field and
+ * the TaxonomyHiddenList binding itself. A SchemaXml with Customization fails with HTTP 500 and leaves the
+ * list unusable, so this is the only way CopyJet creates such columns.
+ */
+export function createTaxonomyFieldBody(listUrl: string | undefined, spec: ITaxonomyFieldSpec, options: number): ICsomBody {
+  return {
+    actions:
+      '<ObjectPath Id="10" ObjectPathId="5" />' +
+      `<SetProperty Id="11" ObjectPathId="5" Name="SspId">${guidParam(spec.termStoreId)}</SetProperty>` +
+      `<SetProperty Id="12" ObjectPathId="5" Name="TermSetId">${guidParam(spec.termSetId)}</SetProperty>` +
+      `<SetProperty Id="13" ObjectPathId="5" Name="AnchorId">${guidParam(spec.anchorId || '00000000-0000-0000-0000-000000000000')}</SetProperty>` +
+      `<SetProperty Id="14" ObjectPathId="5" Name="Open">${boolParam(!!spec.open)}</SetProperty>` +
+      '<Method Name="Update" Id="15" ObjectPathId="5" />' +
+      fieldQuery(5),
+    objectPaths:
+      ROOT +
+      fieldsPath(listUrl) +
+      `<Method Id="5" ParentId="4" Name="AddFieldAsXml"><Parameters><Parameter Type="String">${escapeXml(spec.schemaXml)}</Parameter>${boolParam(false)}<Parameter Type="Enum">${Math.floor(options)}</Parameter></Parameters></Method>`
+  };
+}
+
+/** List.Fields.Add(Web.AvailableFields.GetById(id)): puts an existing site column on a list as it is. */
+export function addExistingFieldBody(listUrl: string, fieldId: string): ICsomBody {
+  return {
+    actions: '<ObjectPath Id="10" ObjectPathId="7" /><ObjectPath Id="11" ObjectPathId="5" />' + fieldQuery(5),
+    objectPaths:
+      ROOT +
+      fieldsPath(listUrl) +
+      '<Property Id="6" ParentId="2" Name="AvailableFields" />' +
+      `<Method Id="7" ParentId="6" Name="GetById"><Parameters>${guidParam(fieldId)}</Parameters></Method>` +
+      '<Method Id="5" ParentId="4" Name="Add"><Parameters><Parameter ObjectPathId="7" /></Parameters></Method>'
+  };
+}

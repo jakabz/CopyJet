@@ -1,3 +1,4 @@
+import { TermStoreClient, fillTermSetPath } from '../taxonomy';
 import type { SPFI } from '@pnp/sp';
 import '@pnp/sp/webs';
 import '@pnp/sp/lists';
@@ -56,6 +57,7 @@ export class ListFieldExtractor implements IExtractor<IListFieldDef> {
     const site = await loadSourceSite(sp, opts.signal);
     const lists = site.lists.filter((l) => wanted.some((k) => k.indexOf(`listField:${l.key}/`) === 0));
     const found: string[] = [];
+    const termStore = new TermStoreClient(sp);
 
     for (const l of lists) {
       throwIfAborted(opts.signal);
@@ -68,24 +70,23 @@ export class ListFieldExtractor implements IExtractor<IListFieldDef> {
         continue;
       }
       const fields = (await this._fields(sp, l.info.RootFolder.ServerRelativeUrl)).filter((f) => isCopiedListField(f, l.info.Id));
-      fields
-        .filter((f) => wanted.indexOf(listFieldKey(l.key, f.InternalName)) >= 0)
-        .forEach((f) => {
-          const ref: IArtifactRef = { kind: this.kind, key: listFieldKey(l.key, f.InternalName) };
-          found.push(ref.key);
-          const def = templateFieldFrom(f, opts.tokens, opts.log, ref);
-          const target = listKeyOf(def.lookupList);
-          if ((def.type === 'Lookup' || def.type === 'LookupMulti') && !target) {
-            opts.log.warn(`Lookup column ${def.internalName} points to a list outside the site.`, { artifact: ref, code: 'LOOKUP_TARGET_UNKNOWN' });
-          }
-          const listFields = (listDef.fields = listDef.fields || []);
-          const at = listFields.findIndex((x) => x.internalName === def.internalName);
-          if (at >= 0) {
-            listFields[at] = def;
-          } else {
-            listFields.push(def);
-          }
-        });
+      for (const f of fields.filter((x) => wanted.indexOf(listFieldKey(l.key, x.InternalName)) >= 0)) {
+        const ref: IArtifactRef = { kind: this.kind, key: listFieldKey(l.key, f.InternalName) };
+        found.push(ref.key);
+        const def = templateFieldFrom(f, opts.tokens, opts.log, ref);
+        await fillTermSetPath(def, termStore, (message) => opts.log.warn(message, { artifact: ref, code: 'TERM_SET_NOT_FOUND' }));
+        const target = listKeyOf(def.lookupList);
+        if ((def.type === 'Lookup' || def.type === 'LookupMulti') && !target) {
+          opts.log.warn(`Lookup column ${def.internalName} points to a list outside the site.`, { artifact: ref, code: 'LOOKUP_TARGET_UNKNOWN' });
+        }
+        const listFields = (listDef.fields = listDef.fields || []);
+        const at = listFields.findIndex((x) => x.internalName === def.internalName);
+        if (at >= 0) {
+          listFields[at] = def;
+        } else {
+          listFields.push(def);
+        }
+      }
     }
 
     wanted

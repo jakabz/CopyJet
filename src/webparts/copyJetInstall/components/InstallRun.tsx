@@ -4,7 +4,7 @@ import type { SPFI } from '@pnp/sp';
 import * as strings from 'CopyJetInstallWebPartStrings';
 import { createInstallContext, createProviders, runPlan, type IRunResult, type StepStatus } from '../../../core/engine';
 import type { Logger } from '../../../core/logger';
-import type { PrincipalMapper } from '../../../core/mapping';
+import { TermMapper, type PrincipalMapper } from '../../../core/mapping';
 import type { ArtifactKind, ConflictMode, IInstallContext, ITemplateReader } from '../../../core/model';
 import { buildPlan, type IPlanStep } from '../../../core/planner';
 import { LogViewer } from '../../../shared/components/LogViewer';
@@ -72,7 +72,8 @@ export const InstallRun: React.FC<IInstallRunProps> = ({ sp, reader, principals,
       setElapsed(Date.now() - started);
       onStatus('finished', () => undefined);
     };
-    createInstallContext(sp, logger, ac.signal, { reader, principals })
+    // Terms are mapped afresh for the run (no rules to keep): a term deleted since the preview is seen as missing.
+    createInstallContext(sp, logger, ac.signal, { reader, principals, terms: new TermMapper(sp, reader.manifest.terms || []) })
       .then((c) => {
         setCtx(c);
         setCurrent(plan.steps[0]);

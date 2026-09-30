@@ -1,7 +1,7 @@
 import * as React from 'react';
 import * as strings from 'CopyJetInstallWebPartStrings';
 import { Logger } from '../../../core/logger';
-import { PrincipalMapper } from '../../../core/mapping';
+import { PrincipalMapper, TermMapper } from '../../../core/mapping';
 import type { ConflictMode, ITemplateReader } from '../../../core/model';
 import { downloadLog } from '../../../shared/components/LogViewer';
 import { WizardShell } from '../../../shared/components/WizardShell';
@@ -18,6 +18,8 @@ interface IInstallState {
   reader?: ITemplateReader;
   /** One mapper per loaded template: the mapping step fills it, the install reuses it. */
   principals?: PrincipalMapper;
+  /** Template terms → target terms, filled by the mapping step and reused by the install. */
+  terms?: TermMapper;
   fileName?: string;
   permissionsOk?: boolean;
   disabled: string[];
@@ -52,13 +54,22 @@ const CopyJetInstall: React.FC<ICopyJetInstallProps> = ({ sp, siteTitle, siteUrl
         targetUrl={siteUrl}
         reader={state.reader}
         fileName={state.fileName}
-        onLoaded={(reader, fileName) => update({ reader, fileName, principals: reader ? new PrincipalMapper(sp, reader.manifest.principals) : undefined, disabled: [], modes: {} })}
+        onLoaded={(reader, fileName) =>
+          update({
+            reader,
+            fileName,
+            principals: reader ? new PrincipalMapper(sp, reader.manifest.principals) : undefined,
+            terms: reader ? new TermMapper(sp, reader.manifest.terms || []) : undefined,
+            disabled: [],
+            modes: {}
+          })
+        }
         onPermissions={(ok) => update({ permissionsOk: ok })}
       />
     );
     footerEnd = <Button text={strings.Next} kind="primary" disabled={!template || !state.permissionsOk} onClick={() => update({ step: 1 })} />;
   } else if (state.step === 1) {
-    body = <MappingStep sp={sp} template={template} principals={state.principals!} />;
+    body = <MappingStep sp={sp} template={template} principals={state.principals!} terms={state.terms!} />;
     footerEnd = (
       <>
         <Button text={strings.Back} onClick={() => update({ step: 0 })} />

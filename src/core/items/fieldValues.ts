@@ -23,7 +23,9 @@ export type ItemFieldKind =
   | 'user'
   | 'userMulti'
   | 'lookup'
-  | 'lookupMulti';
+  | 'lookupMulti'
+  | 'taxonomy'
+  | 'taxonomyMulti';
 
 const KINDS: { [typeAsString: string]: ItemFieldKind } = {
   Text: 'text',
@@ -39,11 +41,13 @@ const KINDS: { [typeAsString: string]: ItemFieldKind } = {
   User: 'user',
   UserMulti: 'userMulti',
   Lookup: 'lookup',
-  LookupMulti: 'lookupMulti'
+  LookupMulti: 'lookupMulti',
+  TaxonomyFieldType: 'taxonomy',
+  TaxonomyFieldTypeMulti: 'taxonomyMulti'
 };
 
 /** Types whose value CopyJet does not copy yet (warned once per column); everything else unknown is ignored. */
-export const NOT_YET_COPIED_TYPES = ['TaxonomyFieldType', 'TaxonomyFieldTypeMulti', 'Thumbnail', 'Location', 'Geolocation'];
+export const NOT_YET_COPIED_TYPES = ['Thumbnail', 'Location', 'Geolocation'];
 
 /**
  * Columns SharePoint adds and fills itself (automatic image tags of libraries, spike 10 A): neither the column
@@ -66,6 +70,16 @@ export interface IItemField {
   internalName: string;
   typeAsString: string;
   kind: ItemFieldKind;
+  /** Managed Metadata columns: the term set (from the SchemaXml's Customization). */
+  termSetId?: string;
+}
+
+export const isTaxonomyKind = (kind: ItemFieldKind): boolean => kind === 'taxonomy' || kind === 'taxonomyMulti';
+
+/** TermSetId of a Managed Metadata column's SchemaXml. */
+export function termSetIdOf(schemaXml: string | undefined): string | undefined {
+  const m = schemaXml ? /<Name>TermSetId<\/Name>\s*<Value[^>]*>([^<]*)</.exec(schemaXml) : null;
+  return m && !/^0{8}-/.test(m[1]) ? m[1].replace(/[{}]/g, '').toLowerCase() : undefined;
 }
 
 export function itemFieldKind(typeAsString: string): ItemFieldKind | undefined {
@@ -73,10 +87,16 @@ export function itemFieldKind(typeAsString: string): ItemFieldKind | undefined {
 }
 
 /** A list column as REST returns it → the item field CopyJet copies, or undefined. */
-export function toItemField(f: { InternalName: string; TypeAsString: string; Hidden?: boolean; ReadOnlyField?: boolean }): IItemField | undefined {
+export function toItemField(f: { InternalName: string; TypeAsString: string; Hidden?: boolean; ReadOnlyField?: boolean; SchemaXml?: string }): IItemField | undefined {
   if (f.Hidden || f.ReadOnlyField || SKIPPED_FIELDS.indexOf(f.InternalName) >= 0) return undefined;
   const kind = itemFieldKind(f.TypeAsString);
-  return kind ? { internalName: f.InternalName, typeAsString: f.TypeAsString, kind } : undefined;
+  if (!kind) return undefined;
+  const field: IItemField = { internalName: f.InternalName, typeAsString: f.TypeAsString, kind };
+  if (isTaxonomyKind(kind)) {
+    const termSetId = termSetIdOf(f.SchemaXml);
+    if (termSetId) field.termSetId = termSetId;
+  }
+  return field;
 }
 
 export const isLookupKind = (kind: ItemFieldKind): boolean => kind === 'lookup' || kind === 'lookupMulti';
@@ -103,6 +123,8 @@ export interface IToTemplateContext {
   tokens: TokenContext;
   /** Site user ID → '{principal:key}', or undefined when the principal cannot be carried (SharePoint group …). */
   principal(userId: number): string | undefined;
+  /** Term ID → the template's term key, or undefined for a term not found in the term store. */
+  term?(termId: string): string | undefined;
 }
 
 /** A REST item value → template value; undefined means "nothing to copy" (empty). */
@@ -144,6 +166,14 @@ export function toTemplateValue(field: IItemField, raw: unknown, ctx: IToTemplat
       const ids = asArray<number>(raw).map(Number).filter((id) => id > 0);
       return ids.length ? { lookup: ids } : undefined;
     }
+    case 'taxonomy':
+    case 'taxonomyMulti': {
+      // { Label, TermGuid, WssId } or an array of them; the label comes from the term store (spike 11 A).
+      const keys = asArray<{ TermGuid?: string }>(raw)
+        .map((v) => (v && v.TermGuid && ctx.term ? ctx.term(v.TermGuid) : undefined))
+        .filter((k): k is string => !!k);
+      return keys.length ? { terms: keys } : undefined;
+    }
     default:
       return undefined;
   }
@@ -156,6 +186,8 @@ export interface IToTargetContext {
   localTime(utcIso: string): string;
   /** Source lookup IDs → target IDs; unknown ones are dropped. */
   lookupIds?(field: IItemField, sourceIds: number[]): number[];
+  /** Template term keys → target terms; unmapped ones are dropped (an unknown GUID fails the item, spike 11 C). */
+  termValues?(keys: string[]): Array<{ termId: string; label: string }>;
 }
 
 /** Target lookup IDs → form value. Multi lookups need the empty value part: "1;#;#2" ("1;#2" silently keeps only the first, spike 08 E). */
@@ -215,6 +247,15 @@ export function toTargetValue(field: IItemField, value: FieldValue, ctx: IToTarg
     case 'lookupMulti': {
       const ids = (value as { lookup?: number[] }).lookup || [];
       return lookupValue(field, ctx.lookupIds ? ctx.lookupIds(field, ids) : []);
+    }
+    case 'taxonomy':
+    case 'taxonomyMulti': {
+      const keys = (value as { terms?: string[] }).terms || [];
+      const terms = ctx.termValues ? ctx.termValues(keys) : [];
+      if (!terms.length) return undefined;
+      // "Label|GUID"; several separated by ";" ("-1;#Label|GUID" is refused, spike 11 C).
+      const text = (t: { termId: string; label: string }): string => `${t.label.replace(/[;|]/g, ' ')}|${t.termId}`;
+      return field.kind === 'taxonomy' ? text(terms[0]) : terms.map(text).join(';');
     }
     default:
       return undefined;

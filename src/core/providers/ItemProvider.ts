@@ -19,6 +19,7 @@ import {
   readTargetFields,
   readWebLocale,
   runItemWrites,
+  termKeysOf,
   toTargetValue,
   warnMissingFields,
   webLocalTime,
@@ -125,6 +126,8 @@ export class ItemProvider implements IProvider<IListItemsDef> {
     const times = webLocalTime(sp);
     await times.prepare(dateValuesOf(file.items, fields, 'all'), ctx.signal);
     await content.principals.map(principalKeysOf(file.items, fields), ctx.tokens, ctx.log, ctx.signal);
+    const terms = content.terms;
+    if (terms) await terms.map(termKeysOf(file.items, fields), ctx.log, ctx.signal);
     await this._ensureFolders(sp, listUrl, file.items, ref, ctx);
     const contentTypes = await readListContentTypes(sp, listUrl);
 
@@ -134,7 +137,7 @@ export class ItemProvider implements IProvider<IListItemsDef> {
       Object.keys(item.values).forEach((name) => {
         const f = fields[name];
         if (!f || isLookupKind(f.kind)) return;
-        const v = toTargetValue(f, item.values[name], { locale, tokens: ctx.tokens, localTime: (iso) => times.local(iso) });
+        const v = toTargetValue(f, item.values[name], { locale, tokens: ctx.tokens, localTime: (iso) => times.local(iso), termValues: (keys) => (terms ? terms.resolved(keys) : []) });
         if (v !== undefined) formValues.push({ FieldName: name, FieldValue: v });
       });
       if (item.contentType) {

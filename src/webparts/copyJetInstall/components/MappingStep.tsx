@@ -5,7 +5,16 @@ import '@pnp/sp/webs';
 import '@pnp/sp/site-users/web';
 import * as strings from 'CopyJetInstallWebPartStrings';
 import { Logger } from '../../../core/logger';
-import { parseMappingCsv, type IDomainRule, type IPrincipalMapping, type IPrincipalRules, type PrincipalMapper, type PrincipalStrategy } from '../../../core/mapping';
+import {
+  parseMappingCsv,
+  type IDomainRule,
+  type IPrincipalMapping,
+  type IPrincipalRules,
+  type ITermMapping,
+  type PrincipalMapper,
+  type PrincipalStrategy,
+  type TermMapper
+} from '../../../core/mapping';
 import type { ICopyJetTemplate } from '../../../core/model';
 import { TokenContext } from '../../../core/tokenizer';
 import { Button, Message, Tag, ui } from '../../../shared/components/ui';
@@ -16,6 +25,8 @@ export interface IMappingStepProps {
   template: ICopyJetTemplate;
   /** Looks the people up on the target site; its rules and results are reused by the install. */
   principals: PrincipalMapper;
+  /** Looks the template's terms up in the target term store (same term, else same label path). */
+  terms: TermMapper;
 }
 
 const loginText = (login: string | undefined): string => (login ? login.split('|').pop() || login : '—');
@@ -46,7 +57,7 @@ function commonDomain(template: ICopyJetTemplate): string | undefined {
  * table, the CSV table, the same account, the same e-mail, domain replacement, the fallback user. Changing a
  * rule maps everyone again. Managed Metadata terms follow in a later step.
  */
-export const MappingStep: React.FC<IMappingStepProps> = ({ sp, template, principals }) => {
+export const MappingStep: React.FC<IMappingStepProps> = ({ sp, template, principals, terms: termMapper }) => {
   const users = template.principals;
   const terms = template.terms || [];
   const [rules, setRules] = React.useState<IPrincipalRules>(principals.rules);
@@ -59,6 +70,25 @@ export const MappingStep: React.FC<IMappingStepProps> = ({ sp, template, princip
   const [fallback, setFallback] = React.useState<string>(rules.fallback || '');
   const [useFallback, setUseFallback] = React.useState(!!rules.fallback);
   const csvInput = React.useRef<HTMLInputElement>(null);
+  const [termMappings, setTermMappings] = React.useState<{ [key: string]: ITermMapping } | undefined>(undefined);
+  const [termError, setTermError] = React.useState<string | undefined>(undefined);
+
+  React.useEffect(() => {
+    if (!(template.terms || []).length) return;
+    let live = true;
+    termMapper.map().then(
+      (list) => {
+        if (!live) return;
+        const byKey: { [key: string]: ITermMapping } = {};
+        list.forEach((m) => (byKey[m.key] = m));
+        setTermMappings(byKey);
+      },
+      (e: unknown) => live && setTermError(e instanceof Error ? e.message : String(e))
+    );
+    return () => {
+      live = false;
+    };
+  }, [template, termMapper]);
 
   // Suggest the installing user's domain as the target of the domain replacement.
   React.useEffect(() => {
@@ -235,26 +265,41 @@ export const MappingStep: React.FC<IMappingStepProps> = ({ sp, template, princip
       )}
       {terms.length > 0 && (
         <>
-          <Message kind="warning">{strings.TermsLater}</Message>
-          <div className={ui.strong}>{strings.ManagedMetadata}</div>
-          <table className={ui.table}>
-            <thead>
-              <tr>
-                <th>{strings.ColTermPath}</th>
-                <th>{strings.ColStatus}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {terms.map((t) => (
-                <tr key={t.key}>
-                  <td>{t.path}</td>
-                  <td>
-                    <Tag kind="diff">{strings.NotMapped}</Tag>
-                  </td>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span className={ui.strong}>{strings.ManagedMetadata}</span>
+            {termMappings && (
+              <span className={ui.muted}>{format(strings.TermsMapped, terms.filter((t) => termMappings[t.key] && termMappings[t.key].termId).length, terms.length)}</span>
+            )}
+          </div>
+          {termError && <Message kind="error">{termError}</Message>}
+          {termMappings && terms.some((t) => !termMappings[t.key] || !termMappings[t.key].termId) && <Message kind="warning">{strings.TermsMissingNote}</Message>}
+          {!termMappings && !termError ? (
+            <Spinner label={strings.TermsChecking} />
+          ) : (
+            <table className={ui.table}>
+              <thead>
+                <tr>
+                  <th>{strings.ColTermPath}</th>
+                  <th>{strings.ColStatus}</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {terms.map((t) => {
+                  const m = termMappings && termMappings[t.key];
+                  return (
+                    <tr key={t.key}>
+                      <td>{t.path.split('/').join(' / ')}</td>
+                      <td>
+                        {m && m.strategy === 'sameId' && <Tag kind="same">{strings.TermSame}</Tag>}
+                        {m && m.strategy === 'path' && <Tag kind="new">{strings.TermByPath}</Tag>}
+                        {(!m || !m.termId) && <Tag kind="diff">{strings.TermMissing}</Tag>}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          )}
         </>
       )}
     </>
