@@ -47,3 +47,9 @@ registerToken({ name: 'associatedmembergroup', hasArgument: false, kind: 'text',
 registerToken({ name: 'associatedvisitorgroup', hasArgument: false, kind: 'text', autoTokenize: false });
 // People in item values and system fields: {principal:key} → the target login name, set by the PrincipalMapper.
 registerToken({ name: 'principal', hasArgument: true, kind: 'text', autoTokenize: false });
+// Modern pages (spike 12): the web's own ID and view IDs appear in web part properties.
+registerToken({ name: 'webid', hasArgument: false, kind: 'guid', autoTokenize: true });
+// {viewid:<listkey>/<view title>}; the ViewProvider registers the view it created or found.
+registerToken({ name: 'viewid', hasArgument: true, kind: 'guid', autoTokenize: true });
+// The site collection's ID (quick links and other web parts keep siteId next to webId).
+registerToken({ name: 'siteid', hasArgument: false, kind: 'guid', autoTokenize: true });

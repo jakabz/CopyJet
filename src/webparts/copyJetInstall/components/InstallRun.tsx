@@ -39,7 +39,9 @@ const PHASES: Array<[ArtifactKind, () => string]> = [
   ['view', () => strings.PhaseViews],
   ['items', () => strings.PhaseItems],
   ['files', () => strings.PhaseFiles],
-  ['itemLookups', () => strings.PhaseItemLookups]
+  ['page', () => strings.PhasePages],
+  ['itemLookups', () => strings.PhaseItemLookups],
+  ['navigation', () => strings.PhaseNavigation]
 ];
 
 const FAILED: StepStatus[] = ['failed', 'blocked', 'cancelled'];

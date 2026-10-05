@@ -896,7 +896,8 @@ export const copyJetSchemaV1: Record<string, unknown> = {
             "append",
             "replace"
           ],
-          "default": "append"
+          "default": "append",
+          "description": "A CopyJet a cél menüjéből soha nem töröl: a 'replace' is hozzáfűzésként települ (figyelmeztetéssel)."
         },
         "quickLaunch": {
           "type": "array",
@@ -909,6 +910,11 @@ export const copyJetSchemaV1: Record<string, unknown> = {
           "items": {
             "$ref": "#/$defs/navNode"
           }
+        },
+        "homePage": {
+          "type": "string",
+          "pattern": "^[^/\\\\]+\\.aspx$",
+          "description": "1.1: a cél kezdőlapja lesz (SitePages/<név>), ha a lap a célon megvan."
         }
       }
     },
@@ -929,6 +935,13 @@ export const copyJetSchemaV1: Record<string, unknown> = {
         "isExternal": {
           "type": "boolean",
           "default": false
+        },
+        "audiences": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/guid"
+          },
+          "description": "1.1: célközönség (Entra-csoportok azonosítói); csak azonos tenantba települ."
         },
         "children": {
           "type": "array",

@@ -1,13 +1,16 @@
 import { CopyJetError } from '../errors';
 import type { ICopyJetTemplate } from '../model';
 
-export const CURRENT_SCHEMA_VERSION = '1.0';
+export const CURRENT_SCHEMA_VERSION = '1.1';
 
 /**
  * Migration chain keyed by the version it upgrades FROM; each step returns the next minor version.
  * Example for a future 1.1: '1.0': (t) => ({ ...t, schemaVersion: '1.1', newField: [] })
  */
-const MIGRATIONS: Record<string, (t: Record<string, unknown>) => Record<string, unknown>> = {};
+const MIGRATIONS: Record<string, (t: Record<string, unknown>) => Record<string, unknown>> = {
+  // 1.1 (2026-10-05): optional navigation.homePage and navNode.audiences; a 1.0 template is valid as it is.
+  '1.0': (t) => ({ ...t, schemaVersion: '1.1' })
+};
 
 function parseVersion(v: unknown): { major: number; minor: number } {
   const m = typeof v === 'string' ? /^(\d+)\.(\d+)$/.exec(v) : null;

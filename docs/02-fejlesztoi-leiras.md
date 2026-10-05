@@ -230,8 +230,8 @@ export interface IExtractor<TDef> {
 | `ListSecurityExtractor` | Egyedi listajogosultság | `HasUniqueRoleAssignments`, `roleAssignments.expand("Member,RoleDefinitionBindings")` |
 | `ItemExtractor` | Listaelemek (a mappák a `ListExtractor`-ban), mellékletek | `items` `ID gt N` szűrésű, ID szerint rendezett 2000-es lapokban (indexelt, a nézetküszöb alatt); a személy és a lookup mező `<mező>Id` alakban (nincs `$expand`, nincs lookup-küszöb). A felhasználók a `siteusers`-ből `{principal:key}` tokenként kerülnek a `principals`-be; a rendszerfiók és az SP-csoport nem. Tartalomtípus: a szülő site-tartalomtípus ID-ja (REST `Parent`). Mellékletek: csak az `Attachments` jelzős elemeknél `AttachmentFiles`, a fájl `attachments/<listkey>/<elem-ID>/<név>` útvonalra kerül (a `..` egy pontra rövidül). Kimenet: `items/<listkey>.json`, `docs/spikes/08`, `09` |
 | `FileExtractor` | Fájlok, metaadatok, opcionálisan verziók | Egy lekérdezés `$expand=File` (`File/Length` szöveg, `File/CheckOutType`); a kivett és a túl nagy fájl (alapértelmezés 250 MB) figyelmeztetéssel kimarad; metaadat az elemekével közös kódból (`sourceItems.ts`); tartalom `getBlob()`, korábbi verzió `versions.getById(id).getBlob()`; kimenet `files/<listkey>/_meta.json`, `files/<listkey>/<útvonal>`, `files/<listkey>/_v/<verzió>/<útvonal>`, `docs/spikes/10` |
-| `PageExtractor` | Modern lapok, SiteAssets képek | `sp.web.loadClientsidePage()`, `CanvasContent1`, `LayoutWebpartsContent`; kép-URL-ek kigyűjtése |
-| `NavigationExtractor` | Bal oldali és felső menü | `web.navigation.quicklaunch` / `topNavigationBar`, `children` rekurzívan |
+| `PageExtractor` | Modern lapok, SiteAssets képek | `_api/sitepages/pages(id)` `CanvasContent1` (szöveg; a lap listaelemének mezője más és nagyobb) és `LayoutWebpartsContent`, a PnPjs lapmodulja nélkül (az átrendezné a vásznat). Tokenizálás: `{site}`/`{siterelative}`, `{webid}`, `{siteid}`, `{listkey}` és `{viewid:lista/nézet}`, csak a sablon listáira; sablonon kívüli lista → `PAGE_LIST_OUTSIDE_TEMPLATE`. A SiteAssets képek (vászon, fejléc, `BannerImageUrl`) az `assets/SiteAssets/…` bejegyzésekbe kerülnek; `requiredWebParts` a `GetClientSideWebParts` `isInternal` alapján, `docs/spikes/12` |
+| `NavigationExtractor` | Bal oldali és felső menü, kezdőlap | `MenuState` (1025 / 1002, célközönséggel), legfeljebb 3 szint. Kimarad: a beépített (1000–1999), a rejtett és a törölt csomópont. A link nélküli fejléc `http://linkless.header/`. A web és a sablon listáinak linkje tokenizálva (`{siterelative}/{listurl:K}/…`). A kezdőlap `navigation.homePage` (séma 1.1), `docs/spikes/13` |
 
 **Szabályok**
 
@@ -268,8 +268,8 @@ export interface IProvider<TDef> {
 | `ItemProvider` | `addValidateUpdateItemUsingPath` batch-ben (100) | Csak üres (legfeljebb mappákat tartalmazó) céllistába ír: futási állapot nélkül nem tudható, mit írt be egy korábbi futás, duplikálni pedig nem szabad. A szám és a dátum a **cél web** területi beállítása szerint szövegként megy (`items/locale.ts`, a helyi idő a SharePoint `utcToLocalTime`-jából, naponta egy hívással). A hiányzó mappák előbb készülnek (különben HTTP 500), a tartalomtípus `ContentTypeId`-vel, az Author/Editor/Created/Modified ugyanabban a hívásban (másik felhasználóra is, verziózott listán is, `docs/spikes/08` G–I; a dátum percre pontos, mert a site rövid formátumában nincs másodperc). Mezőszintű hiba (`HasException`) esetén az elem nem jön létre: figyelmeztetés, ha pedig egy sem sikerül, a lépés hibás. A lookupok kimaradnak, az `IdMap` kitöltődik. Mellékletek az elemek után (`attachmentFiles.add`, meglévő név = HTTP 400 → kihagyva), utána a Módosította és a Módosítva újra megy; ismert korlát, hogy mellékletenként +1 verzió keletkezik a telepítő nevén, `docs/spikes/08`, `09` |
 | `ItemLookupProvider` | `items(id).validateUpdateListItem` | Második kör (`itemLookups:<lista>`): a lista és a lookup-céllisták elemei után fut, az `IdMap`-ekkel képez le. LookupMulti `a;#;#b` alakban; az Editor és a Modified újra megy, hogy megmaradjon. Lookup-körök egymásra nem várnak, így a ciklikus lookup (A → B → A) is települ |
 | `FileProvider` | `files.addUsingPath` (10 MB-ig), felette üres fájl + `setContentChunked` (10 MB-os darabok); utána `validateUpdateListItem` (`bNewDocumentUpdate: true`, dokumentumtárban új verzió nélkül) | Soha nem ír felül: a meglévő útvonal (HTTP 400, `-2130575257`) kimarad, az újrafuttatás a hiányzókat pótolja. Verziók a legrégebbitől, mindegyik után Módosította és Módosítva; a régi verziók szerzője a telepítő lesz (ismert korlát). A lookupokat a céllisták tartalma után (planner) rögtön feloldja. Hivatkozásos mód (`createCopyJobs`) a 4. fázisban, `docs/spikes/10` |
-| `PageProvider` | `ClientsidePage` létrehozás, vászon betöltés `deepResolve` után, `save()` + publikálás | Előtte `GetClientSideWebParts` ellenőrzés; SiteAssets képek feltöltése előbb |
-| `NavigationProvider` | `quicklaunch.add` / `topNavigationBar.add`, gyerekekkel | Hozzáfűzés duplikációszűréssel vagy csere; kezdőlap beállítása (`rootFolder.update({WelcomePage})`) |
+| `PageProvider` | `sitepages/pages` POST → `checkoutpage` → `savepageasdraft` → átnevezés (`FileLeafRef`) → `publish` (így 1.0; az átnevezés az első vázlatmentés után, különben `(1)` utótag lesz) | A képek előbb a cél SiteAssets tárba (létrehozva, ha nincs; meglévő fájlt nem ír felül); a hiányzó webpart figyelmeztetés (`PAGE_WEBPART_MISSING`), a lap ettől még települ; engedékeny feloldás, a megmaradt tokenekről `PAGE_TOKEN_UNRESOLVED`; meglévő lapot csak frissítés módban ír felül; a kezdőlapot nem állítja (az a navigáció dolga); a planner csak sorrendben köti a listákhoz és nézetekhez (`after`), nem blokkol, `docs/spikes/12` |
+| `NavigationProvider` | `web/navigation/<menü>` és `GetNodeById(id)/Children` POST; célközönség `MERGE {AudienceIds}`; kezdőlap `rootfolder` `MERGE {WelcomePage}` | Csak hozzáfűz, a célon semmit nem töröl; a `replace` is hozzáfűzés (`NAV_REPLACE_AS_APPEND`). Azonos szinten azonos cím és URL, link nélküli fejlécnél azonos cím → „már megvan”. A célon nem létező belső link kimarad (`NAV_LINK_BROKEN`); ha gyerekei vannak, link nélküli fejlécként kerül fel. A célközönség csak azonos tenantban települ (`NAV_AUDIENCE_OTHER_TENANT`). A kezdőlapot csak akkor állítja be, ha a lap a célon megvan (`NAV_HOME_PAGE_MISSING`) |
 
 **Közös szabályok**
 
@@ -443,9 +443,9 @@ A fejlesztés a rendszerterv fázisait követi; minden fázis végén működő,
 
 **3. fázis – Lapok és navigáció**
 
-- [ ] `PageExtractor` / `PageProvider`, SiteAssets, `deepTokenize` / `deepResolve`
-- [ ] Webpart-elérhetőség ellenőrzése (`GetClientSideWebParts`)
-- [ ] `NavigationExtractor` / `NavigationProvider`, kezdőlap
+- [x] `PageExtractor` / `PageProvider`, SiteAssets, tokenizálás és feloldás (`docs/spikes/12`) – valódi Forrás → Cél telepítéssel igazolva 2026-10-05-én (fejléckép, kép, lista- és gyorshivatkozás-webpart)
+- [x] Webpart-elérhetőség ellenőrzése (`GetClientSideWebParts`): a Setup `isCustom` jelzést ír, az Install figyelmeztet a hiányzóra
+- [x] `NavigationExtractor` / `NavigationProvider`, kezdőlap (`docs/spikes/13`, séma 1.1: `navigation.homePage`, `navNode.audiences`) – SharePointon ellenőrizve 2026-10-05 (azonos tenant, másik tenant, újrafuttatás)
 
 **4. fázis – Robusztusság**
 
@@ -458,3 +458,4 @@ A fejlesztés a rendszerterv fázisait követi; minden fázis végén működő,
 
 - [ ] Cél site létrehozása az Install-ból
 - [ ] Hub-navigáció, további listatípusok
+- [ ] Egyedi SPFx-megoldások (webpartok, extensionök) telepítése a célra: a lapon lévő egyedi webpart (`requiredWebParts`, `isCustom`) és a site-on használt extensionök `.sppkg`-jának felderítése a forrás app catalogjából, a sablonban jelölése, és az Install-ban a site-ra telepítése (`app add/install`), ha a célon elérhető; különben figyelmeztetés

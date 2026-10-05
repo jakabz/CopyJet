@@ -75,7 +75,12 @@ describe('migrate', () => {
   it('returns a current-version template unchanged', () => {
     const t = example();
     expect(migrate(t)).toEqual(t);
-    expect(CURRENT_SCHEMA_VERSION).toBe('1.0');
+    expect(CURRENT_SCHEMA_VERSION).toBe('1.1');
+  });
+
+  it('upgrades a 1.0 template to 1.1 without changing its content', () => {
+    const t = { ...example(), schemaVersion: '1.0' };
+    expect(migrate(t)).toEqual({ ...t, schemaVersion: '1.1' });
   });
 
   it.each([

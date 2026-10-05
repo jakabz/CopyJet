@@ -2,6 +2,7 @@ import * as React from 'react';
 import { Icon, Spinner } from '@fluentui/react';
 import type { SPFI } from '@pnp/sp';
 import * as strings from 'CopyJetInstallWebPartStrings';
+import { countNodes } from '../../../core/navigation';
 import { missingInstallPermissions } from '../../../core/engine';
 import { CopyJetError } from '../../../core/errors';
 import type { ITemplateReader } from '../../../core/model';
@@ -185,6 +186,8 @@ export const LoadStep: React.FC<ILoadStepProps> = ({ sp, targetUrl, reader, file
               {format(strings.ContentSummary, t.lists.length, listFields, views)}
               {t.meta.includesContent && items ? format(strings.ContentItems, items) : ''}
               {t.meta.includesContent && files ? format(strings.ContentFiles, files, Math.max(1, Math.round(bytes / 1048576))) : ''}
+              {t.pages.length ? format(strings.ContentPages, t.pages.length) : ''}
+              {t.navigation && (t.navigation.quickLaunch || t.navigation.topNavigation) ? format(strings.ContentNavigation, countNodes(t.navigation.quickLaunch) + countNodes(t.navigation.topNavigation)) : ''}
             </span>
             <span style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
               {t.meta.checksum ? t.meta.checksum.slice(0, 18) + '…' : strings.NoChecksum}

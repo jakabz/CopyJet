@@ -1,5 +1,7 @@
 import { listFilesDefs, type IListFilesDef } from '../files/filesModel';
 import { listItemsDefs, type IListItemsDef } from '../items/itemsModel';
+import { navKeys, type INavStepDef } from '../navigation/navModel';
+import { pageKey, type IPageDef } from '../pages/pageModel';
 import { listFieldDefs, type IListFieldDef } from '../lists/listFields';
 import { listViewDefs, type IListViewDef } from '../lists/views';
 import type { ArtifactKind, IArtifactRef, IContentType, ICopyJetTemplate, IField, IGroup, IList } from '../model';
@@ -17,7 +19,7 @@ import {
 } from './dependencies';
 
 /** Provider input per kind. */
-export type StepDef = IGroup | IField | IContentType | IList | IListFieldDef | IListViewDef | IListItemsDef | IListFilesDef;
+export type StepDef = IGroup | IField | IContentType | IList | IListFieldDef | IListViewDef | IListItemsDef | IListFilesDef | IPageDef | INavStepDef;
 
 export interface IPlanStep {
   ref: IArtifactRef;
@@ -55,17 +57,28 @@ export interface IPlanOptions {
 }
 
 /** Install order within a level (rendszerterv §6): groups, site columns, content types, lists, list columns, views, content. */
-const KIND_ORDER: ArtifactKind[] = ['group', 'siteField', 'contentType', 'list', 'listField', 'view', 'items', 'files', 'itemLookups'];
+const KIND_ORDER: ArtifactKind[] = ['group', 'siteField', 'contentType', 'list', 'listField', 'view', 'items', 'files', 'itemLookups', 'page', 'navigation'];
 
-function node(kind: ArtifactKind, key: string, def: StepDef, deps: IArtifactRef[]): { ref: IArtifactRef; def: StepDef; deps: string[] } {
-  return { ref: { kind, key }, def, deps: deps.map((d) => d.key) };
+interface ITemplateNode {
+  ref: IArtifactRef;
+  def: StepDef;
+  /** Must succeed first; a failed one blocks this step. */
+  deps: string[];
+  /** Only ordering: run after these when they are in the plan, whatever their outcome. */
+  after?: string[];
+}
+
+function node(kind: ArtifactKind, key: string, def: StepDef, deps: IArtifactRef[], after?: IArtifactRef[]): ITemplateNode {
+  const n: ITemplateNode = { ref: { kind, key }, def, deps: deps.map((d) => d.key) };
+  if (after && after.length) n.after = after.map((d) => d.key);
+  return n;
 }
 
 /**
  * Every artifact of the template with its unfiltered dependencies (they may point outside the template –
  * the Setup uses them to offer missing dependencies, the planner keeps only in-template edges).
  */
-export function templateNodes(template: ICopyJetTemplate): Array<{ ref: IArtifactRef; def: StepDef; deps: string[] }> {
+export function templateNodes(template: ICopyJetTemplate): ITemplateNode[] {
   return [
     ...template.groups.map((g) => node('group', artifactKeys.group(g.key), g, groupDependencies(g))),
     ...template.siteFields.map((f) => node('siteField', artifactKeys.siteField(f.internalName), f, siteFieldDependencies(f))),
@@ -77,8 +90,45 @@ export function templateNodes(template: ICopyJetTemplate): Array<{ ref: IArtifac
     ...listItemsDefs(template)
       .filter((d) => d.lookupTargets.length > 0)
       .map((d) => node('itemLookups', artifactKeys.itemLookups(d.listKey), d, itemLookupsDependencies(d, template.lists))),
-    ...listFilesDefs(template).map((d) => node('files', artifactKeys.files(d.listKey), d, filesDependencies(d, template.lists)))
+    ...listFilesDefs(template).map((d) => node('files', artifactKeys.files(d.listKey), d, filesDependencies(d, template.lists))),
+    // Pages point at lists, views and their content by ID: they come after all of them, but a failed list only
+    // leaves its web part empty, so these are ordering-only edges (spike 12).
+    ...(template.pages || []).map((p) => node('page', pageKey(p.name), p, [], pageAfter(template))),
+    // Menus and the home page point at lists and pages: last, ordering-only as well (spike 13).
+    ...navigationDefs(template).map((d) => node('navigation', navKeys[d.part], d, [], navigationAfter(template)))
   ];
+}
+
+/** One step per carried menu, and one for the home page. */
+function navigationDefs(template: ICopyJetTemplate): INavStepDef[] {
+  const nav = template.navigation;
+  if (!nav) return [];
+  const out: INavStepDef[] = [];
+  (['quickLaunch', 'topNavigation'] as const).forEach((part) => {
+    const nodes = nav[part];
+    if (nodes && nodes.length) out.push({ part, nodes, mode: nav.mode, sourceTenant: template.meta.sourceTenant });
+  });
+  if (nav.homePage) {
+    const page = nav.homePage;
+    out.push({ part: 'homePage', page, inTemplate: (template.pages || []).some((p) => p.name.toLowerCase() === page.toLowerCase()) });
+  }
+  return out;
+}
+
+function navigationAfter(template: ICopyJetTemplate): IArtifactRef[] {
+  return pageAfter(template).concat((template.pages || []).map((p) => ({ kind: 'page' as const, key: pageKey(p.name) })));
+}
+
+/** Every structure and content step of the template's lists (what a page may show). */
+function pageAfter(template: ICopyJetTemplate): IArtifactRef[] {
+  const refs: IArtifactRef[] = [];
+  template.lists.forEach((l) => {
+    refs.push({ kind: 'list', key: artifactKeys.list(l.key) }, { kind: 'items', key: artifactKeys.items(l.key) }, { kind: 'files', key: artifactKeys.files(l.key) });
+    refs.push({ kind: 'itemLookups', key: artifactKeys.itemLookups(l.key) });
+    (l.fields || []).forEach((f) => refs.push({ kind: 'listField', key: artifactKeys.listField(l.key, f.internalName) }));
+    (l.views || []).forEach((v) => refs.push({ kind: 'view', key: artifactKeys.view(l.key, v.title) }));
+  });
+  return refs;
 }
 
 /** The SharePoint schema a step changes (see IPlanStep.lock). */
@@ -111,6 +161,7 @@ export function buildPlan(template: ICopyJetTemplate, options: IPlanOptions = {}
   const known: { [key: string]: boolean } = {};
   all.forEach((n) => (known[n.ref.key] = true));
   all.forEach((n) => (n.deps = n.deps.filter((d, i, arr) => known[d] && d !== n.ref.key && arr.indexOf(d) === i)));
+  all.forEach((n) => (n.after = (n.after || []).filter((d, i, arr) => known[d] && d !== n.ref.key && arr.indexOf(d) === i && n.deps.indexOf(d) < 0)));
 
   // Disabled steps and everything that (transitively) depends on them.
   const excluded: IExcludedStep[] = [];
@@ -138,8 +189,10 @@ export function buildPlan(template: ICopyJetTemplate, options: IPlanOptions = {}
   const pending: { [key: string]: number } = {};
   const dependents: { [key: string]: string[] } = {};
   active.forEach((n) => {
-    pending[n.ref.key] = n.deps.length;
-    n.deps.forEach((d) => (dependents[d] = dependents[d] || []).push(n.ref.key));
+    // Ordering-only edges to excluded steps are dropped: nothing to wait for.
+    const waits = n.deps.concat((n.after || []).filter((d) => !out[d]));
+    pending[n.ref.key] = waits.length;
+    waits.forEach((d) => (dependents[d] = dependents[d] || []).push(n.ref.key));
   });
   const byKey: { [key: string]: (typeof active)[number] } = {};
   active.forEach((n) => (byKey[n.ref.key] = n));

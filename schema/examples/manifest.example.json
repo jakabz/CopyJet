@@ -1,6 +1,6 @@
 {
   "$schema": "../copyjet.v1.schema.json",
-  "schemaVersion": "1.0",
+  "schemaVersion": "1.1",
   "meta": {
     "name": "Projekt site sablon",
     "description": "Projektek, ügyfelek és dokumentumok tartalommal",
@@ -135,9 +135,10 @@
         { "title": "Nyitott projektek", "url": "{site}/Lists/Projektek/Nyitott projektek.aspx" }
       ] },
       { "title": "Dokumentumok", "url": "{site}/Shared Documents" },
-      { "title": "Céges portál", "url": "https://contoso.sharepoint.com", "isExternal": true }
+      { "title": "Céges portál", "url": "https://contoso.sharepoint.com", "isExternal": true, "audiences": ["a64a6140-20c7-44c7-ae78-754d724f63e8"] }
     ],
-    "topNavigation": []
+    "topNavigation": [],
+    "homePage": "Home.aspx"
   },
   "principals": [
     { "key": "anna", "kind": "user", "loginName": "i:0#.f|membership|anna@contoso.com", "email": "anna@contoso.com", "upn": "anna@contoso.com", "displayName": "Kiss Anna" },

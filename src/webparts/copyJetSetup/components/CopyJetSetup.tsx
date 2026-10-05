@@ -21,8 +21,10 @@ export function kindLabel(kind: ArtifactKind): string {
     listField: strings.KindListField,
     view: strings.KindView,
     items: strings.KindItems,
+    page: strings.KindPage,
     files: strings.KindFiles,
-    itemLookups: strings.KindItemLookups
+    itemLookups: strings.KindItemLookups,
+    navigation: strings.KindNavigation
   };
   return labels[kind] || kind;
 }
@@ -151,7 +153,7 @@ const CopyJetSetup: React.FC<ICopyJetSetupProps> = ({ sp, siteTitle, createdBy }
   } else if (state.step === 1) {
     body = (
       <OptionsStep
-        items={selectedArtifacts(artifacts, state.selected).filter((a) => a.ref.kind === 'list' || a.ref.kind === 'group')}
+        items={selectedArtifacts(artifacts, state.selected).filter((a) => a.ref.kind === 'list' || a.ref.kind === 'group' || a.ref.kind === 'page')}
         name={state.name}
         description={state.description}
         onName={(name) => dispatch({ type: 'name', name })}
@@ -176,7 +178,8 @@ const CopyJetSetup: React.FC<ICopyJetSetupProps> = ({ sp, siteTitle, createdBy }
     body = (
       <SummaryStep
         sp={sp}
-        refs={structure}
+        refs={structure.filter((r) => r.kind !== 'page')}
+        pages={selectedArtifacts(artifacts, state.selected).filter((a) => a.ref.kind === 'page')}
         discovered={artifacts}
         name={state.name}
         createdBy={createdBy}

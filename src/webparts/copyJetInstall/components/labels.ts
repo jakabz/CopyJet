@@ -1,5 +1,7 @@
 import * as strings from 'CopyJetInstallWebPartStrings';
 import type { IListFilesDef } from '../../../core/files';
+import type { INavStepDef } from '../../../core/navigation';
+import type { IPageDef } from '../../../core/pages';
 import type { IListItemsDef } from '../../../core/items';
 import type { IListFieldDef, IListViewDef } from '../../../core/lists';
 import type { ArtifactKind, IContentType, ICopyJetTemplate, IField, IGroup, IList } from '../../../core/model';
@@ -18,7 +20,9 @@ export function kindLabel(kind: ArtifactKind, def?: unknown): string {
     view: strings.KindView,
     items: strings.KindItems,
     files: strings.KindFiles,
-    itemLookups: strings.KindItemLookups
+    page: strings.KindPage,
+    itemLookups: strings.KindItemLookups,
+    navigation: strings.KindNavigation
   };
   if (kind === 'list' && def && (def as IList).template === DOCUMENT_LIBRARY) return strings.KindLibrary;
   return labels[kind] || kind;
@@ -49,6 +53,13 @@ export function stepTitle(step: IPlanStep, template: ICopyJetTemplate, targetSit
       return listTitle((step.def as IListItemsDef).listKey);
     case 'files':
       return listTitle((step.def as IListFilesDef).listKey);
+    case 'page':
+      return (step.def as IPageDef).title.replace('{sitename}', targetSiteTitle);
+    case 'navigation': {
+      const d = step.def as INavStepDef;
+      if (d.part === 'homePage') return format(strings.NavHomePage, d.page);
+      return d.part === 'quickLaunch' ? strings.NavQuickLaunch : strings.NavTopNavigation;
+    }
     default:
       return step.ref.key;
   }
@@ -59,9 +70,12 @@ export function format(template: string, ...args: Array<string | number>): strin
   return template.replace(/\{(\d+)\}/g, (m, i) => (args[Number(i)] !== undefined ? String(args[Number(i)]) : m));
 }
 
-/** Human-readable reason for an 'unsupported' diff change code (see providers). */
+/** Human-readable reason for a diff change code (see providers); "code:arg" fills {0} with arg. */
 export function reasonText(code: string): string {
-  return (strings as unknown as Record<string, string>)[`Reason${code}`] || code;
+  const i = code.indexOf(':');
+  const name = i < 0 ? code : code.slice(0, i);
+  const text = (strings as unknown as Record<string, string>)[`Reason${name}`];
+  return text ? format(text, i < 0 ? '' : code.slice(i + 1)) : code;
 }
 
 export const logLabels = {

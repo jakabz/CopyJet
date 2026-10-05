@@ -56,7 +56,7 @@ export interface IExtractRequest {
 
 export interface IExtractResult {
   writer: ITemplateWriter;
-  /** 'zip' when the template carries content (items, files), else 'json'. */
+  /** 'zip' when the template carries content (items, files, pages), else 'json'. */
   format: 'json' | 'zip';
   /** Discovered, copyable artifacts the template depends on but that were not selected. */
   missing: IDiscoveredArtifact[];
@@ -83,7 +83,7 @@ export async function extractTemplate(sp: SPFI, req: IExtractRequest): Promise<I
     sp.web.select('Url', 'Language')<{ Url: string; Language: number }>(),
     loadSourceSite(sp, req.signal)
   ]);
-  const format = req.refs.some((r) => r.kind === 'items' || r.kind === 'files') ? 'zip' : 'json';
+  const format = req.refs.some((r) => r.kind === 'items' || r.kind === 'files' || r.kind === 'page') ? 'zip' : 'json';
   const manifest = createEmptyTemplate({
     name: req.name,
     description: req.description || undefined,
