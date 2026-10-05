@@ -3,7 +3,8 @@ import '@pnp/sp/webs';
 import '@pnp/sp/site-groups';
 import '@pnp/sp/security';
 import { throwIfAborted } from '../errors';
-import { GROUP_SELECT, PRINCIPAL_SHAREPOINT_GROUP, roleName, type IGroupInfoLike, type IRoleBinding } from './groupModel';
+import { isHttpStatus } from '../http/status';
+import { GROUP_SELECT, PRINCIPAL_SHAREPOINT_GROUP, roleKind, roleName, type IGroupInfoLike, type IRoleBinding } from './groupModel';
 
 export interface IAssociatedGroups {
   owner?: number;
@@ -56,4 +57,25 @@ export async function readWebSecurity(sp: SPFI, signal?: AbortSignal): Promise<I
       rolesByPrincipal[a.PrincipalId] = a.RoleDefinitionBindings.map(roleName).filter((n): n is string => !!n);
     });
   return { associated, groups, rolesByPrincipal };
+}
+
+/**
+ * ID of a template permission level on a web: built-in levels by RoleTypeKind (language-independent, spike 07;
+ * Restricted View is kind 8, spike 15), custom ones by name from the web's levels – getByName answers a missing
+ * level with HTTP 500, not 404. Undefined when the web has no such level.
+ */
+export async function roleDefinitionId(sp: SPFI, name: string): Promise<number | undefined> {
+  const kind = roleKind(name);
+  if (kind === undefined) {
+    const all = await sp.web.roleDefinitions.select('Id', 'Name')<Array<{ Id: number; Name: string }>>();
+    const hit = all.filter((d) => d.Name.toLowerCase() === name.toLowerCase())[0];
+    return hit ? hit.Id : undefined;
+  }
+  try {
+    const d = await sp.web.roleDefinitions.getByType(kind as 2 | 3 | 4 | 5 | 6).select('Id')<{ Id: number }>();
+    return d && d.Id ? d.Id : undefined;
+  } catch (e) {
+    if (isHttpStatus(e, 404)) return undefined;
+    throw e;
+  }
 }

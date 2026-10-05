@@ -187,6 +187,10 @@ define([], function() {
     "ResumeNew": "Új telepítés",
     "ResumeChosen": "A telepítés az előző futás folytatása lesz.",
     "ResumeCheckFailed": "Az előző futások nem olvashatók: {0}",
-    "StatPrevious": "Előző futásban kész"
+    "StatPrevious": "Előző futásban kész",
+    "KindListSecurity": "Listajogosultság",
+    "PhaseListSecurity": "Listajogosultságok ({0})",
+    "ReasoninheritsPermissions": "a céllista örökli a jogosultságokat – az öröklés megszűnik, és a sablon hozzárendelései kerülnek rá",
+    "Reasonassignments": "{0} szerepkör-hozzárendelés hiányzik – hozzáadja, a meglévőket nem veszi el"
   }
 });

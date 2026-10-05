@@ -67,10 +67,9 @@ function fakeWeb(state: IWebState): { sp: ReturnType<typeof createMockSp>['sp'];
       const d = state.roleDefs.find((x) => x.RoleTypeKind === Number(m![1]));
       return d ? { body: { Id: d.Id } } : { status: 404, body: {} };
     }
-    if ((m = /\/roledefinitions\/getbyname\('([^']+)'\)/i.exec(req.url))) {
-      const d = state.roleDefs.find((x) => x.Name === m![1]);
-      return d ? { body: { Id: d.Id } } : { status: 404, body: {} };
-    }
+    // A missing level by name is HTTP 500 on SharePoint; CopyJet reads the level list instead (1.9.1.0).
+    if (/\/roledefinitions\/getbyname\(/i.test(req.url)) return { status: 500, body: {} };
+    if (/\/roledefinitions\?\$select=Id,Name$/i.test(req.url)) return { body: state.roleDefs.map((d) => ({ Id: d.Id, Name: d.Name })) };
     if (req.method === 'GET' && (m = /\/siteGroups\?\$filter=Title eq '([^']+)'/i.exec(req.url))) {
       return { body: state.groups.filter((g) => g.Title === m![1]) };
     }

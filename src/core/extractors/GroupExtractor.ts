@@ -16,7 +16,7 @@ import { uniqueKeys } from '../keys';
 import { groupDependencies } from '../planner/dependencies';
 import type { IArtifactRef, IDiscoveredArtifact, IExtractOptions, IExtractor, IGroup, ITemplateWriter } from '../model';
 
-interface ISourceGroup {
+export interface ISourceGroup {
   info: IGroupInfoLike;
   key: string;
 }
@@ -29,7 +29,7 @@ export class GroupExtractor implements IExtractor<IGroup> {
   public readonly kind = 'group' as const;
 
   public async discover(sp: SPFI, signal?: AbortSignal): Promise<IDiscoveredArtifact[]> {
-    const { groups } = await this._source(sp, signal);
+    const { groups } = await readSourceGroups(sp, signal);
     return groups.map((g) => ({ ref: { kind: this.kind, key: groupRefKey(g.key) }, title: g.info.Title }));
   }
 
@@ -43,7 +43,7 @@ export class GroupExtractor implements IExtractor<IGroup> {
     if (wanted.length === 0) {
       return;
     }
-    const { groups, security, siteTitle } = await this._source(sp, opts.signal);
+    const { groups, security, siteTitle } = await readSourceGroups(sp, opts.signal);
     const keyById: { [id: number]: string } = {};
     groups.forEach((g) => (keyById[g.info.Id] = g.key));
 
@@ -85,11 +85,16 @@ export class GroupExtractor implements IExtractor<IGroup> {
     return '{associatedownergroup}';
   }
 
-  private async _source(sp: SPFI, signal?: AbortSignal): Promise<{ groups: ISourceGroup[]; security: IWebSecurity; siteTitle: string }> {
-    const [security, web] = await Promise.all([readWebSecurity(sp, signal), sp.web.select('Title')<{ Title: string }>()]);
-    const a = security.associated;
-    const own = security.groups.filter((g) => security.rolesByPrincipal[g.Id] !== undefined && [a.owner, a.member, a.visitor].indexOf(g.Id) < 0);
-    const keys = uniqueKeys(own.map((g) => [String(g.Id), groupKeyName(templateGroupTitle(g.Title, web.Title))] as [string, string]), 'group');
-    return { groups: own.map((info) => ({ info, key: keys[String(info.Id)] })), security, siteTitle: web.Title };
-  }
+}
+
+/**
+ * The source web's own groups with their template keys: groups with a web role assignment, without the associated
+ * groups (spike 07). The list security extractor names groups by the same keys.
+ */
+export async function readSourceGroups(sp: SPFI, signal?: AbortSignal): Promise<{ groups: ISourceGroup[]; security: IWebSecurity; siteTitle: string }> {
+  const [security, web] = await Promise.all([readWebSecurity(sp, signal), sp.web.select('Title')<{ Title: string }>()]);
+  const a = security.associated;
+  const own = security.groups.filter((g) => security.rolesByPrincipal[g.Id] !== undefined && [a.owner, a.member, a.visitor].indexOf(g.Id) < 0);
+  const keys = uniqueKeys(own.map((g) => [String(g.Id), groupKeyName(templateGroupTitle(g.Title, web.Title))] as [string, string]), 'group');
+  return { groups: own.map((info) => ({ info, key: keys[String(info.Id)] })), security, siteTitle: web.Title };
 }

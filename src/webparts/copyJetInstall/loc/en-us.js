@@ -187,6 +187,10 @@ define([], function() {
     "ResumeNew": "New installation",
     "ResumeChosen": "The installation resumes the earlier run.",
     "ResumeCheckFailed": "Earlier runs could not be read: {0}",
-    "StatPrevious": "Done in the earlier run"
+    "StatPrevious": "Done in the earlier run",
+    "KindListSecurity": "List permissions",
+    "PhaseListSecurity": "List permissions ({0})",
+    "ReasoninheritsPermissions": "the target list inherits its permissions – the inheritance is broken and the template's assignments are added",
+    "Reasonassignments": "{0} role assignments missing – added, existing ones are kept"
   }
 });

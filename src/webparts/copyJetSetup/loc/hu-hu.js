@@ -154,6 +154,10 @@ define([], function() {
     "LogError": "hiba",
     "LogEmpty": "Még nincs bejegyzés.",
     "LogExportCsv": "Napló letöltése (CSV)",
-    "LogExportJson": "Napló (JSON)"
+    "LogExportJson": "Napló (JSON)",
+    "Permissions": "Jogosultságok",
+    "UniquePermissions": "Egyedi jogosultságok",
+    "AssignmentCount": "{0} hozzárendelés",
+    "KindListSecurity": "Listajogosultság"
   }
 });

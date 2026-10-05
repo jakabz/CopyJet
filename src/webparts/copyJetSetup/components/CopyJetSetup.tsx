@@ -20,6 +20,7 @@ export function kindLabel(kind: ArtifactKind): string {
     list: strings.KindList,
     listField: strings.KindListField,
     view: strings.KindView,
+    listSecurity: strings.KindListSecurity,
     items: strings.KindItems,
     page: strings.KindPage,
     files: strings.KindFiles,

@@ -8,10 +8,10 @@ import {
   compareGroups,
   groupRefKey,
   groupUpdateProps,
-  roleKind,
   roleName,
   type IGroupInfoLike,
-  type IRoleBinding
+  type IRoleBinding,
+  roleDefinitionId
 } from '../groups';
 import { csomSetGroupOwner, type FetchLike } from '../http/csom';
 import { isHttpStatus } from '../http/status';
@@ -126,27 +126,12 @@ export class GroupProvider implements IProvider<IGroup> {
     const have = existing.map((r) => r.toLowerCase());
     for (const name of (def.roles || []).filter((r) => have.indexOf(r.toLowerCase()) < 0)) {
       throwIfAborted(ctx.signal);
-      const roleDefId = await this._roleDefinitionId(sp, name);
+      const roleDefId = await roleDefinitionId(sp, name);
       if (roleDefId === undefined) {
         ctx.log.warn(`Permission level "${name}" does not exist on the target site; not assigned.`, { artifact: ref, code: 'ROLE_NOT_FOUND', detail: name });
         continue;
       }
       await sp.web.roleAssignments.add(groupId, roleDefId);
-    }
-  }
-
-  /** Built-in levels by RoleTypeKind (language-independent, spike 07), custom ones by name. */
-  private async _roleDefinitionId(sp: SPFI, name: string): Promise<number | undefined> {
-    const kind = roleKind(name);
-    try {
-      const d =
-        kind !== undefined
-          ? await sp.web.roleDefinitions.getByType(kind as 2 | 3 | 4 | 5 | 6).select('Id')<{ Id: number }>()
-          : await sp.web.roleDefinitions.getByName(name).select('Id')<{ Id: number }>();
-      return d && d.Id ? d.Id : undefined;
-    } catch (e) {
-      if (isHttpStatus(e, 404)) return undefined;
-      throw e;
     }
   }
 

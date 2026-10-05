@@ -18,6 +18,7 @@ export function kindLabel(kind: ArtifactKind, def?: unknown): string {
     list: strings.KindList,
     listField: strings.KindListField,
     view: strings.KindView,
+    listSecurity: strings.KindListSecurity,
     items: strings.KindItems,
     files: strings.KindFiles,
     page: strings.KindPage,
@@ -50,6 +51,7 @@ export function stepTitle(step: IPlanStep, template: ICopyJetTemplate, targetSit
     }
     case 'items':
     case 'itemLookups':
+    case 'listSecurity':
       return listTitle((step.def as IListItemsDef).listKey);
     case 'files':
       return listTitle((step.def as IListFilesDef).listKey);

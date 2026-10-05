@@ -6,6 +6,7 @@ import { NavigationExtractor } from '../extractors/NavigationExtractor';
 import { PageExtractor } from '../extractors/PageExtractor';
 import { ListExtractor } from '../extractors/ListExtractor';
 import { ListFieldExtractor } from '../extractors/ListFieldExtractor';
+import { ListSecurityExtractor } from '../extractors/ListSecurityExtractor';
 import { SiteFieldExtractor } from '../extractors/SiteFieldExtractor';
 import { ViewExtractor } from '../extractors/ViewExtractor';
 import type { FetchLike } from '../http/raw';
@@ -19,6 +20,7 @@ import { NavigationProvider } from '../providers/NavigationProvider';
 import { PageProvider } from '../providers/PageProvider';
 import { ListFieldProvider } from '../providers/ListFieldProvider';
 import { ListProvider } from '../providers/ListProvider';
+import { ListSecurityProvider } from '../providers/ListSecurityProvider';
 import { SiteFieldProvider } from '../providers/SiteFieldProvider';
 import { ViewProvider } from '../providers/ViewProvider';
 import type { ProviderMap } from './engine';
@@ -35,6 +37,7 @@ export function createProviders(fetchImpl?: FetchLike, items?: IItemProviderOpti
     list: new ListProvider(fetchImpl),
     listField: new ListFieldProvider(fetchImpl),
     view: new ViewProvider(),
+    listSecurity: new ListSecurityProvider(),
     items: new ItemProvider(items),
     itemLookups: new ItemLookupProvider(items),
     files: new FileProvider(),
@@ -55,6 +58,7 @@ export function createExtractors(): Array<IExtractor<unknown>> {
     new ListExtractor(),
     new ListFieldExtractor(),
     new ViewExtractor(),
+    new ListSecurityExtractor(),
     new ItemExtractor(),
     new FileExtractor(),
     new PageExtractor(),

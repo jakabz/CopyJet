@@ -187,6 +187,10 @@ declare interface ICopyJetInstallWebPartStrings {
   ResumeChosen: string;
   ResumeCheckFailed: string;
   StatPrevious: string;
+  KindListSecurity: string;
+  PhaseListSecurity: string;
+  ReasoninheritsPermissions: string;
+  Reasonassignments: string;
 }
 
 declare module 'CopyJetInstallWebPartStrings' {

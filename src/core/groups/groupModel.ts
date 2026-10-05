@@ -25,7 +25,7 @@ export interface IRoleBinding {
  * Built-in permission levels by RoleTypeKind; their names are language-dependent ("Munkatárs" /
  * "Contribute"), the kind is not (spike 07). The template uses these English names.
  */
-const BUILT_IN_ROLES: { [kind: number]: string } = { 2: 'Read', 3: 'Contribute', 4: 'Design', 5: 'Full Control', 6: 'Edit' };
+const BUILT_IN_ROLES: { [kind: number]: string } = { 2: 'Read', 3: 'Contribute', 4: 'Design', 5: 'Full Control', 6: 'Edit', 7: 'Review', 8: 'Restricted View' };
 
 /** Limited Access (1) is granted implicitly by SharePoint and never copied. */
 const LIMITED_ACCESS = 1;

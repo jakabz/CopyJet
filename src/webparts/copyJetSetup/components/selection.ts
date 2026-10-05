@@ -8,11 +8,11 @@ const DOCUMENT_LIBRARY = 101;
 
 export interface ITreeNode {
   item: IDiscoveredArtifact;
-  /** List columns and views under a list. */
+  /** List columns, views and unique permissions under a list. */
   children: IDiscoveredArtifact[];
 }
 
-const CHILD_KINDS: ArtifactKind[] = ['listField', 'view'];
+const CHILD_KINDS: ArtifactKind[] = ['listField', 'view', 'listSecurity'];
 
 export function categoryOf(a: IDiscoveredArtifact): Category | undefined {
   switch (a.ref.kind) {

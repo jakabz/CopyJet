@@ -154,6 +154,10 @@ declare interface ICopyJetSetupWebPartStrings {
   LogEmpty: string;
   LogExportCsv: string;
   LogExportJson: string;
+  Permissions: string;
+  UniquePermissions: string;
+  AssignmentCount: string;
+  KindListSecurity: string;
 }
 
 declare module 'CopyJetSetupWebPartStrings' {

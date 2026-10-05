@@ -3,7 +3,7 @@ import type { IListFilesDef } from '../files/filesModel';
 import type { IListItemsDef } from '../items/itemsModel';
 import type { IListFieldDef } from '../lists/listFields';
 import type { IListViewDef } from '../lists/views';
-import type { IArtifactRef, IContentType, IField, IGroup, IList } from '../model';
+import type { IArtifactRef, IContentType, IField, IGroup, IList, ISecurity } from '../model';
 
 /**
  * What each artifact needs installed before it. Shared by the Setup (offering missing dependencies) and the
@@ -25,8 +25,18 @@ export const artifactKeys = {
   view: (listKey: string, title: string): string => `view:${listKey}/${title}`,
   items: (listKey: string): string => `items:${listKey}`,
   files: (listKey: string): string => `files:${listKey}`,
-  itemLookups: (listKey: string): string => `itemLookups:${listKey}`
+  itemLookups: (listKey: string): string => `itemLookups:${listKey}`,
+  listSecurity: (listKey: string): string => `listSecurity:${listKey}`
 };
+
+/** List permissions need their list and the template groups they name (spike 15). */
+export function listSecurityDependencies(def: { listKey: string; security: ISecurity }): IArtifactRef[] {
+  const groups = (def.security.roleAssignments || [])
+    .map((a) => /^\{groupkey:([^{}]+)\}$/.exec(a.principal))
+    .filter((m): m is RegExpExecArray => !!m)
+    .map((m) => ({ kind: 'group' as const, key: artifactKeys.group(m[1]) }));
+  return [{ kind: 'list' as const, key: artifactKeys.list(def.listKey) } as IArtifactRef].concat(groups);
+}
 
 /** A group owning this one. */
 export function groupDependencies(def: IGroup): IArtifactRef[] {

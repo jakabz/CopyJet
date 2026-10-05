@@ -29,7 +29,7 @@ function unsupportedText(code: string): string {
 
 function meta(a: IDiscoveredArtifact): string {
   if (a.unsupported) return unsupportedText(a.unsupported);
-  if (a.itemCount !== undefined) return format(a.ref.kind === 'navigation' ? strings.LinkCount : strings.ItemCount, a.itemCount);
+  if (a.itemCount !== undefined) return format(a.ref.kind === 'navigation' ? strings.LinkCount : a.ref.kind === 'listSecurity' ? strings.AssignmentCount : strings.ItemCount, a.itemCount);
   if (a.ref.kind === 'contentType') return strings.TypeContentType;
   return a.group || '';
 }
@@ -91,11 +91,11 @@ export const SelectStep: React.FC<ISelectStepProps> = ({ artifacts, selected, on
       )
     ];
     if (open) {
-      (['listField', 'view'] as const).forEach((kind) => {
+      (['listField', 'view', 'listSecurity'] as const).forEach((kind) => {
         const items = n.children.filter((c) => c.ref.kind === kind);
         if (!items.length) return;
         out.push(
-          row(`${n.item.ref.key}:${kind}`, 2, <span className={`${ui.muted} ${styles.subhead}`}>{kind === 'listField' ? strings.Columns : strings.Views}</span>)
+          row(`${n.item.ref.key}:${kind}`, 2, <span className={`${ui.muted} ${styles.subhead}`}>{kind === 'listField' ? strings.Columns : kind === 'view' ? strings.Views : strings.Permissions}</span>)
         );
         items.forEach((c) => {
           const cid = `cj-${c.ref.key}`;
@@ -106,9 +106,9 @@ export const SelectStep: React.FC<ISelectStepProps> = ({ artifacts, selected, on
               <>
                 <input className={ui.check} type="checkbox" id={cid} checked={isOn(c)} disabled={!!c.unsupported} onChange={(e) => onChange(toggleChild(selected, n, c, e.target.checked))} />
                 <label htmlFor={cid} className={styles.rowLabel}>
-                  {c.title}
+                  {c.ref.kind === 'listSecurity' ? strings.UniquePermissions : c.title}
                 </label>
-                <span className={`${ui.muted} ${styles.rowMeta}`}>{c.unsupported ? unsupportedText(c.unsupported) : ''}</span>
+                <span className={`${ui.muted} ${styles.rowMeta}`}>{c.unsupported ? unsupportedText(c.unsupported) : c.ref.kind === 'listSecurity' ? meta(c) : ''}</span>
               </>
             )
           );

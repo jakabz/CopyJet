@@ -40,6 +40,7 @@ const PHASES: Array<[ArtifactKind, () => string]> = [
   ['list', () => strings.PhaseLists],
   ['listField', () => strings.PhaseListFields],
   ['view', () => strings.PhaseViews],
+  ['listSecurity', () => strings.PhaseListSecurity],
   ['items', () => strings.PhaseItems],
   ['files', () => strings.PhaseFiles],
   ['page', () => strings.PhasePages],

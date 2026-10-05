@@ -154,6 +154,10 @@ define([], function() {
     "LogError": "error",
     "LogEmpty": "No entries yet.",
     "LogExportCsv": "Download log (CSV)",
-    "LogExportJson": "Log (JSON)"
+    "LogExportJson": "Log (JSON)",
+    "Permissions": "Permissions",
+    "UniquePermissions": "Unique permissions",
+    "AssignmentCount": "{0} assignments",
+    "KindListSecurity": "List permissions"
   }
 });

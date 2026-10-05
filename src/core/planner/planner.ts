@@ -4,6 +4,7 @@ import { navKeys, type INavStepDef } from '../navigation/navModel';
 import { pageKey, type IPageDef } from '../pages/pageModel';
 import { listFieldDefs, type IListFieldDef } from '../lists/listFields';
 import { listViewDefs, type IListViewDef } from '../lists/views';
+import { listSecurityDefs, type IListSecurityDef } from '../security/listSecurity';
 import type { ArtifactKind, IArtifactRef, IContentType, ICopyJetTemplate, IField, IGroup, IList } from '../model';
 import {
   artifactKeys,
@@ -14,12 +15,13 @@ import {
   itemsDependencies,
   listDependencies,
   listFieldDependencies,
+  listSecurityDependencies,
   siteFieldDependencies,
   viewDependencies
 } from './dependencies';
 
 /** Provider input per kind. */
-export type StepDef = IGroup | IField | IContentType | IList | IListFieldDef | IListViewDef | IListItemsDef | IListFilesDef | IPageDef | INavStepDef;
+export type StepDef = IGroup | IField | IContentType | IList | IListFieldDef | IListViewDef | IListSecurityDef | IListItemsDef | IListFilesDef | IPageDef | INavStepDef;
 
 export interface IPlanStep {
   ref: IArtifactRef;
@@ -57,7 +59,7 @@ export interface IPlanOptions {
 }
 
 /** Install order within a level (rendszerterv §6): groups, site columns, content types, lists, list columns, views, content. */
-const KIND_ORDER: ArtifactKind[] = ['group', 'siteField', 'contentType', 'list', 'listField', 'view', 'items', 'files', 'itemLookups', 'page', 'navigation'];
+const KIND_ORDER: ArtifactKind[] = ['group', 'siteField', 'contentType', 'list', 'listField', 'view', 'listSecurity', 'items', 'files', 'itemLookups', 'page', 'navigation'];
 
 interface ITemplateNode {
   ref: IArtifactRef;
@@ -86,6 +88,7 @@ export function templateNodes(template: ICopyJetTemplate): ITemplateNode[] {
     ...template.lists.map((l) => node('list', artifactKeys.list(l.key), l, listDependencies(l))),
     ...listFieldDefs(template).map((d) => node('listField', artifactKeys.listField(d.listKey, d.field.internalName), d, listFieldDependencies(d))),
     ...listViewDefs(template).map((d) => node('view', artifactKeys.view(d.listKey, d.view.title), d, viewDependencies(d))),
+    ...listSecurityDefs(template).map((d) => node('listSecurity', artifactKeys.listSecurity(d.listKey), d, listSecurityDependencies(d))),
     ...listItemsDefs(template).map((d) => node('items', artifactKeys.items(d.listKey), d, itemsDependencies(d, template.lists.filter((l) => l.key === d.listKey)[0]))),
     ...listItemsDefs(template)
       .filter((d) => d.lookupTargets.length > 0)
@@ -138,6 +141,8 @@ function lockOf(ref: IArtifactRef, def: StepDef): string {
       return `list:${(def as IListFieldDef).listKey}`;
     case 'view':
       return `list:${(def as IListViewDef).listKey}`;
+    case 'listSecurity':
+      return `list:${(def as IListSecurityDef).listKey}`;
     case 'siteField':
       return 'web:fields';
     case 'contentType':
