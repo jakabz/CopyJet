@@ -23,6 +23,9 @@ export interface IOptionsStepProps {
   onVersions: (key: string, on: boolean) => void;
   maxFileMb: number;
   onMaxFileMb: (mb: number) => void;
+  /** Library files by reference (same tenant only). */
+  fileLinks: boolean;
+  onFileLinks: (on: boolean) => void;
 }
 
 /** Choices of the "Max. fájlméret" setting (MB). */
@@ -48,7 +51,7 @@ const Phase2: React.FC = () => <span className={ui.muted}> {strings.Phase2}</spa
  * items, libraries their files (optionally with earlier versions); group members and the folder filter follow
  * later in phase 2 and are shown switched off.
  */
-export const OptionsStep: React.FC<IOptionsStepProps> = ({ items, name, description, onName, onDescription, content, onContent, preserveAuthors, onPreserveAuthors, versions, onVersions, maxFileMb, onMaxFileMb }) => {
+export const OptionsStep: React.FC<IOptionsStepProps> = ({ items, name, description, onName, onDescription, content, onContent, preserveAuthors, onPreserveAuthors, versions, onVersions, maxFileMb, onMaxFileMb, fileLinks, onFileLinks }) => {
   const [open, setOpen] = React.useState<string | undefined>(undefined);
   const current = items.filter((i) => i.ref.key === open)[0];
   const withContent = (key: string): boolean => content.indexOf(key) >= 0;
@@ -113,13 +116,17 @@ export const OptionsStep: React.FC<IOptionsStepProps> = ({ items, name, descript
             </span>
             <span>
               <label htmlFor="cj-maxsize">{strings.MaxFileSize}</label>{' '}
-              <select id="cj-maxsize" className={ui.select} value={maxFileMb} disabled={!hasFiles} onChange={(e) => onMaxFileMb(Number(e.target.value))}>
+              <select id="cj-maxsize" className={ui.select} value={maxFileMb} disabled={!hasFiles || fileLinks} onChange={(e) => onMaxFileMb(Number(e.target.value))}>
                 {MAX_FILE_SIZES.map((mb) => (
                   <option key={mb} value={mb}>
                     {mb >= 1024 ? `${mb / 1024} GB` : `${mb} MB`}
                   </option>
                 ))}
               </select>
+            </span>
+            <span>
+              <input className={ui.check} type="checkbox" id="cj-links" checked={fileLinks} disabled={!hasFiles} onChange={(e) => onFileLinks(e.target.checked)} />{' '}
+              <label htmlFor="cj-links">{strings.FileLinks}</label>
             </span>
             <span>
               <label htmlFor="cj-format">{strings.FormatLabel}</label>{' '}
@@ -132,6 +139,11 @@ export const OptionsStep: React.FC<IOptionsStepProps> = ({ items, name, descript
               </span>
             </span>
           </div>
+          {fileLinks && hasFiles && (
+            <span className={ui.muted} style={{ fontSize: 13 }}>
+              {strings.FileLinksNote}
+            </span>
+          )}
         </div>
       </div>
       <div className={`${ui.sideWide} ${ui.box} ${styles.optionsPanel}`}>

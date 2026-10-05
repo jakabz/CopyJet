@@ -99,7 +99,8 @@ function checkedManifest(json: unknown): ICopyJetTemplate {
 /** Content entries the manifest points to must be in the package. */
 function checkContentEntries(reader: ITemplateReader): ITemplateReader {
   const missing = reader.manifest.lists
-    .filter((l) => l.content && l.content.mode !== 'none' && l.content.sourceMode !== 'reference')
+    // Reference mode still packs the file list (_meta.json); only the files themselves stay at the source.
+    .filter((l) => l.content && l.content.mode !== 'none')
     .map((l) => l.content.source || '')
     .filter((source) => !source || (!reader.has(source) && !reader.has(`${source.replace(/\/+$/, '')}/_meta.json`)));
   if (missing.length) {

@@ -137,6 +137,7 @@ define([], function() {
     "PhaseFiles": "Files ({0})",
     "ContentFiles": " · {0} files (about {1} MB)",
     "ReasontargetHasFiles": "the target library already has files – only missing ones are added, nothing is overwritten",
+    "ReasonotherTenant": "the files are copied by reference from a site of another tenant – they install only within the source tenant and are skipped here",
     "KindItems": "List items",
     "KindItemLookups": "Lookup values",
     "PhaseItems": "List items ({0})",

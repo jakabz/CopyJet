@@ -5,7 +5,7 @@ import '@pnp/sp/items';
 import '@pnp/sp/files';
 import '@pnp/sp/folders';
 import { CopyJetError, isAbortError, throwIfAborted } from '../errors';
-import { CHUNK_SIZE, filesKey, type IListFilesDef } from '../files';
+import { CHUNK_SIZE, COPY_BATCH, copyFiles, filesKey, urlOrigin, type ICopyOutcome, type IListFilesDef } from '../files';
 import { limitConcurrency } from '../http/concurrency';
 import { isHttpStatus } from '../http/status';
 import {
@@ -36,6 +36,29 @@ const ALREADY_EXISTS = /-2130575257/;
 
 const isAlreadyThere = (e: unknown): boolean => isHttpStatus(e, 400) && ALREADY_EXISTS.test(e instanceof Error ? e.message : String(e));
 
+/** Server-relative URL of the folder a file (path in the library) goes into. */
+const folderOf = (listUrl: string, path: string): string => {
+  const i = path.lastIndexOf('/');
+  return i < 0 ? listUrl : `${listUrl}/${path.slice(0, i)}`;
+};
+
+/** Reference-mode batches: files of one folder (one copy destination), at most COPY_BATCH each. */
+function copyBatches(files: FileEntry[]): FileEntry[][] {
+  // Folders in the order of their first file (a key like "2026" would sort first in Object.keys).
+  const byFolder: { [folder: string]: FileEntry[] } = {};
+  const order: string[] = [];
+  files.forEach((f) => {
+    const folder = f.path.slice(0, Math.max(0, f.path.lastIndexOf('/')));
+    if (!byFolder[folder]) order.push(folder);
+    (byFolder[folder] = byFolder[folder] || []).push(f);
+  });
+  const out: FileEntry[][] = [];
+  order.forEach((folder) => {
+    for (let i = 0; i < byFolder[folder].length; i += COPY_BATCH) out.push(byFolder[folder].slice(i, i + COPY_BATCH));
+  });
+  return out;
+}
+
 /** A file entry as the item helpers see it (values, system values). */
 const asItem = (f: { sourceId?: number; values?: FileEntry['values']; system?: FileEntry['system'] }): TemplateItem => ({
   sourceId: f.sourceId || 0,
@@ -49,13 +72,20 @@ const asItem = (f: { sourceId?: number; values?: FileEntry['values']; system?: F
  * metadata (values, content type, author, editor, dates) follows with ValidateUpdateListItem, which on a
  * library makes no new version. Earlier versions, when carried, are uploaded oldest first, each followed by
  * its editor and date; their author stays the installer (known limit).
+ * In reference mode (spike 16) the files are copied on the server from the source site, folder by folder in
+ * batches, without overwriting (an existing path is kept); the metadata follows the same way, since the copy
+ * gives new dates and would keep the source's lookup IDs. Only within the source's tenant (same host).
  */
 export class FileProvider implements IProvider<IListFilesDef> {
   public readonly kind = 'files' as const;
 
+  /** `copyPollMs`: wait between copy-job progress requests in reference mode (default 2 s; tests use 0). */
+  public constructor(private readonly _opts: { copyPollMs?: number } = {}) {}
+
   public async diff(sp: SPFI, def: IListFilesDef, ctx: IInstallContext): Promise<IDiffResult> {
     throwIfAborted(ctx.signal);
     const ref: IArtifactRef = { kind: this.kind, key: filesKey(def.listKey) };
+    if (def.reference && def.reference.origin !== urlOrigin(ctx.targetSiteUrl)) return { ref, status: 'unsupported', changes: ['otherTenant'] };
     let found: Array<{ Id: number }>;
     try {
       found = await sp.web.getList(itemsListUrl(def, ctx)).items.filter('FSObjType eq 0').select('Id').top(1)<Array<{ Id: number }>>();
@@ -132,30 +162,37 @@ export class FileProvider implements IProvider<IListFilesDef> {
     // The run state is saved every few files: a resume then knows the target IDs of the files (lookups).
     let sinceSave = 0;
     const failures: Array<{ path: string; error: string }> = [];
-    const results = await limitConcurrency(
-      todo.map((f) => async () => {
-        const id = await this._upload(sp, listUrl, f, content.reader, (v) => systemFormValues(asItem({ system: v.system }), 'modified', locale, times, ctx), ctx);
-        if (id === undefined) {
-          alreadyThere++;
-          return;
+    // Reference mode copies a batch on the server and then sets the batch's metadata, so an interrupted run
+    // leaves few files without it; embedded mode uploads file by file.
+    for (const batch of def.reference ? copyBatches(todo) : [todo]) {
+      const copied = def.reference ? await this._copy(sp, listUrl, def.reference, batch, ctx) : undefined;
+      const results = await limitConcurrency(
+        batch.map((f) => async () => {
+          const id = copied
+            ? await this._copiedId(sp, listUrl, f, copied[f.path])
+            : await this._upload(sp, listUrl, f, content.reader, (v) => systemFormValues(asItem({ system: v.system }), 'modified', locale, times, ctx), ctx);
+          if (id === undefined) {
+            alreadyThere++;
+            return;
+          }
+          await sp.web.getList(listUrl).items.getById(id).validateUpdateListItem(formValuesOf(f), true);
+          if (f.sourceId) idMap[f.sourceId] = id;
+          added++;
+          if (++sinceSave >= FILES_PER_CHECKPOINT) {
+            sinceSave = 0;
+            await saveCheckpoint(ctx);
+          }
+        }),
+        3,
+        ctx.signal
+      );
+      results.forEach((r, i) => {
+        if (!r.ok) {
+          if (isAbortError(r.error)) throw r.error;
+          failures.push({ path: batch[i].path, error: r.error instanceof Error ? r.error.message : String(r.error) });
         }
-        await sp.web.getList(listUrl).items.getById(id).validateUpdateListItem(formValuesOf(f), true);
-        if (f.sourceId) idMap[f.sourceId] = id;
-        added++;
-        if (++sinceSave >= FILES_PER_CHECKPOINT) {
-          sinceSave = 0;
-          await saveCheckpoint(ctx);
-        }
-      }),
-      3,
-      ctx.signal
-    );
-    results.forEach((r, i) => {
-      if (!r.ok) {
-        if (isAbortError(r.error)) throw r.error;
-        failures.push({ path: todo[i].path, error: r.error instanceof Error ? r.error.message : String(r.error) });
-      }
-    });
+      });
+    }
     Object.keys(unresolved).forEach((name) =>
       ctx.log.warn(`Column ${name}: the items of its lookup list were not written in this run; its values are skipped.`, { artifact: ref, code: 'ITEM_LOOKUP_UNRESOLVED', detail: name })
     );
@@ -168,8 +205,29 @@ export class FileProvider implements IProvider<IListFilesDef> {
     if (added === 0 && failures.length > 0) {
       throw new CopyJetError('FILES_FAILED', `None of the ${todo.length} files could be copied.`, failures.slice(0, 5));
     }
-    ctx.log.info(`Files copied: ${added} of ${todo.length}.`, { artifact: ref });
+    ctx.log.info(`Files copied${def.reference ? ' by reference' : ''}: ${added} of ${todo.length}.`, { artifact: ref });
     return { ref, outcome: empty ? 'created' : 'updated' };
+  }
+
+  /** Server-side copy of a batch (one target folder) from the source; outcomes by template path. */
+  private async _copy(sp: SPFI, listUrl: string, reference: NonNullable<IListFilesDef['reference']>, batch: FileEntry[], ctx: IInstallContext): Promise<{ [path: string]: ICopyOutcome }> {
+    const target = urlOrigin(ctx.targetSiteUrl);
+    const outcomes = await copyFiles(
+      sp,
+      batch.map((f) => `${reference.origin}${f.sourceUrl}`),
+      `${target}${folderOf(listUrl, batch[0].path)}`,
+      { includeVersions: reference.includeVersions, signal: ctx.signal, pollMs: this._opts.copyPollMs }
+    );
+    const out: { [path: string]: ICopyOutcome } = {};
+    outcomes.forEach((o, i) => (out[batch[i].path] = o));
+    return out;
+  }
+
+  /** The target item ID of a file the server copied; undefined when it was already there. */
+  private async _copiedId(sp: SPFI, listUrl: string, f: FileEntry, outcome: ICopyOutcome | undefined): Promise<number | undefined> {
+    if (outcome && outcome.status === 'exists') return undefined;
+    if (!outcome || outcome.status !== 'copied') throw new CopyJetError('FILE_COPY_FAILED', (outcome && outcome.message) || 'The file was not copied.');
+    return (await sp.web.getFileByServerRelativePath(`${listUrl}/${f.path}`).listItemAllFields.select('Id')<{ Id: number }>()).Id;
   }
 
   /**
@@ -185,9 +243,8 @@ export class FileProvider implements IProvider<IListFilesDef> {
     versionValues: (v: NonNullable<FileEntry['versions']>[number]) => IFormValue[],
     ctx: IInstallContext
   ): Promise<number | undefined> {
-    const i = f.path.lastIndexOf('/');
-    const folderUrl = i < 0 ? listUrl : `${listUrl}/${f.path.slice(0, i)}`;
-    const name = f.path.slice(i + 1);
+    const folderUrl = folderOf(listUrl, f.path);
+    const name = f.path.slice(f.path.lastIndexOf('/') + 1);
     const folder = sp.web.getFolderByServerRelativePath(folderUrl);
     const file = sp.web.getFileByServerRelativePath(`${folderUrl}/${name}`);
     const steps: Array<{ blob: string; version?: NonNullable<FileEntry['versions']>[number] }> = (f.versions || []).map((v) => ({ blob: v.blob, version: v }));

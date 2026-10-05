@@ -136,6 +136,7 @@ declare interface ICopyJetInstallWebPartStrings {
   PhaseFiles: string;
   ContentFiles: string;
   ReasontargetHasFiles: string;
+  ReasonotherTenant: string;
   KindItems: string;
   KindItemLookups: string;
   PhaseItems: string;

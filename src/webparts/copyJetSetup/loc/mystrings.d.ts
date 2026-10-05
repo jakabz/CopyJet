@@ -59,6 +59,8 @@ declare interface ICopyJetSetupWebPartStrings {
   DescriptionLabel: string;
   PreserveAuthors: string;
   MaxFileSize: string;
+  FileLinks: string;
+  FileLinksNote: string;
   FormatLabel: string;
   FormatJson: string;
   FormatZip: string;

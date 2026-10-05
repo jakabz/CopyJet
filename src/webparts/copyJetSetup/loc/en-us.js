@@ -60,6 +60,8 @@ define([], function() {
     "DescriptionLabel": "Description (optional)",
     "PreserveAuthors": "Keep author, editor and dates",
     "MaxFileSize": "Max. file size",
+    "FileLinks": "Files by reference (same tenant)",
+    "FileLinksNote": "The files stay out of the template: the install copies them on the server from the source, with their versions when asked. It installs only within the source tenant, and the source files must still be there at install.",
     "FormatLabel": "Format",
     "FormatJson": ".json (structure)",
     "FormatZip": ".zip (with content)",

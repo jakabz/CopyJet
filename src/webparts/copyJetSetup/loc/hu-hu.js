@@ -60,6 +60,8 @@ define([], function() {
     "DescriptionLabel": "Leírás (nem kötelező)",
     "PreserveAuthors": "Szerző, módosító és dátumok megőrzése",
     "MaxFileSize": "Max. fájlméret",
+    "FileLinks": "Fájlok hivatkozással (azonos tenanton)",
+    "FileLinksNote": "A fájlok nem kerülnek a sablonba: a telepítés szerveroldalon másolja őket a forrásból, a verziókkal együtt, ha kérted. Csak a forrással azonos tenantban telepíthető, és a forrásfájloknak a telepítéskor is meg kell lenniük.",
     "FormatLabel": "Formátum",
     "FormatJson": ".json (szerkezet)",
     "FormatZip": ".zip (tartalommal)",

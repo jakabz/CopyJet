@@ -48,6 +48,8 @@ export interface IExtractRequest {
   versionsFor?: string[];
   /** Files larger than this stay out of the package (default 250 MB). */
   maxFileBytes?: number;
+  /** Library files are copied by reference at install (same tenant only). */
+  fileLinks?: boolean;
   log: Logger;
   signal?: AbortSignal;
   /** Called before each extractor runs (with its kind) and once at the end (without). */
@@ -112,6 +114,7 @@ export async function extractTemplate(sp: SPFI, req: IExtractRequest): Promise<I
       preserveAuthors: req.preserveAuthors !== false,
       versionsFor: req.versionsFor,
       maxFileBytes: req.maxFileBytes,
+      fileLinks: req.fileLinks,
       tokens: site.tokens,
       log: req.log,
       signal: req.signal

@@ -52,6 +52,8 @@ interface ISetupState {
   /** Library keys whose earlier file versions are copied (off by default). */
   versions: string[];
   maxFileMb: number;
+  /** Library files by reference: copied on the server at install, same tenant only (off by default). */
+  fileLinks: boolean;
   /** Remounts the export step for a new extraction. */
   runId: number;
   exportStatus?: ExportStatus;
@@ -68,6 +70,7 @@ type Action =
   | { type: 'preserveAuthors'; on: boolean }
   | { type: 'versions'; key: string; on: boolean }
   | { type: 'maxFileMb'; mb: number }
+  | { type: 'fileLinks'; on: boolean }
   | { type: 'export' }
   | { type: 'exportStatus'; status: ExportStatus }
   | { type: 'addMissing'; keys: string[] }
@@ -91,6 +94,8 @@ function reducer(state: ISetupState, action: Action): ISetupState {
       return { ...state, content: state.content.filter((k) => k !== action.key).concat(action.on ? [action.key] : []) };
     case 'preserveAuthors':
       return { ...state, preserveAuthors: action.on };
+    case 'fileLinks':
+      return { ...state, fileLinks: action.on };
     case 'versions':
       return { ...state, versions: state.versions.filter((k) => k !== action.key).concat(action.on ? [action.key] : []) };
     case 'maxFileMb':
@@ -110,7 +115,7 @@ function reducer(state: ISetupState, action: Action): ISetupState {
 
 /** Setup wizard as in docs/ui (setup-1 … setup-4): structure into a .json template, with list items into a .zip. */
 const CopyJetSetup: React.FC<ICopyJetSetupProps> = ({ sp, siteTitle, createdBy }) => {
-  const [state, dispatch] = React.useReducer(reducer, { step: 0, selected: [], name: '', description: '', content: [], preserveAuthors: true, versions: [], maxFileMb: 250, runId: 0 });
+  const [state, dispatch] = React.useReducer(reducer, { step: 0, selected: [], name: '', description: '', content: [], preserveAuthors: true, versions: [], maxFileMb: 250, fileLinks: false, runId: 0 });
   const stopRef = React.useRef<(() => void) | undefined>(undefined);
 
   React.useEffect(() => {
@@ -167,6 +172,8 @@ const CopyJetSetup: React.FC<ICopyJetSetupProps> = ({ sp, siteTitle, createdBy }
         onVersions={(key, on) => dispatch({ type: 'versions', key, on })}
         maxFileMb={state.maxFileMb}
         onMaxFileMb={(mb) => dispatch({ type: 'maxFileMb', mb })}
+        fileLinks={state.fileLinks}
+        onFileLinks={(on) => dispatch({ type: 'fileLinks', on })}
       />
     );
     footerEnd = (
@@ -217,6 +224,7 @@ const CopyJetSetup: React.FC<ICopyJetSetupProps> = ({ sp, siteTitle, createdBy }
         preserveAuthors={state.preserveAuthors}
         versionsFor={versionsFor}
         maxFileBytes={state.maxFileMb * 1024 * 1024}
+        fileLinks={state.fileLinks && contentFiles.length > 0}
         kindLabel={kindLabel}
         logLabels={LOG_LABELS}
         onStatus={(status, stop) => {

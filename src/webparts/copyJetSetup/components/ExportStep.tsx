@@ -24,6 +24,8 @@ export interface IExportStepProps {
   preserveAuthors: boolean;
   versionsFor: string[];
   maxFileBytes: number;
+  /** Library files by reference (same tenant only). */
+  fileLinks: boolean;
   kindLabel: (kind: ArtifactKind) => string;
   logLabels: React.ComponentProps<typeof LogViewer>['labels'];
   /** Reports the status so the wizard can show Stop / New template in its footer. */
@@ -38,7 +40,7 @@ function message(e: unknown): string {
 }
 
 /** Step 4 (docs/ui setup-4): progress, log, output card with download. */
-export const ExportStep: React.FC<IExportStepProps> = ({ sp, refs, discovered, name, description, createdBy, preserveAuthors, versionsFor, maxFileBytes, kindLabel, logLabels, onStatus }) => {
+export const ExportStep: React.FC<IExportStepProps> = ({ sp, refs, discovered, name, description, createdBy, preserveAuthors, versionsFor, maxFileBytes, fileLinks, kindLabel, logLabels, onStatus }) => {
   const [logger] = React.useState(() => new Logger());
   const [status, setStatus] = React.useState<ExportStatus>('running');
   const [progress, setProgress] = React.useState<{ done: number; total: number; kind?: ArtifactKind }>({ done: 0, total: 1 });
@@ -55,7 +57,7 @@ export const ExportStep: React.FC<IExportStepProps> = ({ sp, refs, discovered, n
       onStatus(s, () => ac.abort());
     };
     report('running');
-    extractTemplate(sp, { refs, discovered, name, description, createdBy, preserveAuthors, versionsFor, maxFileBytes, log: logger, signal: ac.signal, onProgress: (done, total, kind) => setProgress({ done, total, kind }) }).then(
+    extractTemplate(sp, { refs, discovered, name, description, createdBy, preserveAuthors, versionsFor, maxFileBytes, fileLinks, log: logger, signal: ac.signal, onProgress: (done, total, kind) => setProgress({ done, total, kind }) }).then(
       (r) => {
         if (ac.signal.aborted) return;
         setResult(r);

@@ -87,8 +87,8 @@ function sourceSp(): { sp: ReturnType<typeof createMockSp>['sp']; requests: IMoc
   }, SOURCE_WEB.Url);
 }
 
-async function extractPackage(log = new Logger()): Promise<ITemplateReader> {
-  const { sp } = sourceSp();
+async function extractPackage(log = new Logger(), fileLinks = false, requests: IMockRequest[] = []): Promise<ITemplateReader> {
+  const { sp, requests: sent } = sourceSp();
   const site = await loadSourceSite(sp);
   const writer = new ZipTemplateWriter(
     createEmptyTemplate({ name: 'Fájlok', createdBy: 'anna@contoso.com', createdAt: '2026-09-27T10:00:00Z', sourceSiteUrl: SOURCE_WEB.Url, sourceTenant: 'contoso', sourceLcid: 1038, includesContent: false })
@@ -97,9 +97,10 @@ async function extractPackage(log = new Logger()): Promise<ITemplateReader> {
   await new FileExtractor().extract(
     sp,
     [{ kind: 'files', key: 'files:Shared_Documents' }],
-    { includeContent: true, includeVersions: true, includeMembers: false, versionsFor: ['Shared_Documents'], tokens: site.tokens, log },
+    { includeContent: true, includeVersions: true, includeMembers: false, versionsFor: ['Shared_Documents'], fileLinks, tokens: site.tokens, log },
     writer
   );
+  requests.push(...sent);
   return openTemplate(await writer.finalize());
 }
 
@@ -137,6 +138,31 @@ describe('FileExtractor', () => {
     ]);
     expect(await (await reader.getBlob('files/Shared_Documents/_v/1.0/2026/jelentés.docx')).text()).toBe('"v512 of jelentés.docx"');
   });
+
+  it('lists files by source URL in reference mode, without downloading them or a size limit', async () => {
+    const log = new Logger();
+    const requests: IMockRequest[] = [];
+    const reader = await extractPackage(log, true, requests);
+    expect(log.entries.filter((e) => e.level === 'warn').map((e) => e.code)).toEqual(['FILE_CHECKED_OUT']);
+    expect(reader.manifest.lists[0].content).toEqual({
+      mode: 'files',
+      sourceMode: 'reference',
+      includeVersions: true,
+      fileCount: 3,
+      sizeBytes: 5 + 8 + 300 * 1024 * 1024,
+      source: 'files/Shared_Documents/',
+      sourceUrl: encodeURI(`https://contoso.sharepoint.com${LIB}`)
+    });
+    const meta = await reader.getJson<IFilesMetaFile>('files/Shared_Documents/_meta.json');
+    expect(meta.files.map((f) => [f.path, f.sourceUrl, f.blob, f.versions])).toEqual([
+      ['Kép.png', `${LIB}/Kép.png`, undefined, undefined],
+      ['2026/jelentés.docx', `${LIB}/2026/jelentés.docx`, undefined, undefined],
+      ['nagy.bin', `${LIB}/nagy.bin`, undefined, undefined]
+    ]);
+    expect(meta.files[1].system).toEqual({ author: '{principal:anna}', editor: '{principal:anna}', created: '2026-01-15T10:00:00Z', modified: '2026-03-01T09:00:00Z' });
+    expect(requests.filter((r) => /\$value$|\/versions/i.test(r.url))).toEqual([]);
+    expect(listFilesDefs(reader.manifest)[0].reference).toEqual({ origin: 'https://contoso.sharepoint.com', includeVersions: true });
+  });
 });
 
 // ---------------------------------------------------------------------------------------------------------
@@ -155,6 +181,8 @@ interface ITargetLib {
   files: { [path: string]: ITargetFile };
   folders: string[];
   chunks: string[];
+  /** Server-side copies (reference mode): source URL → destination folder, with the options sent. */
+  copies?: Array<{ from: string; to: string; versions: boolean }>;
 }
 
 function budapest(iso: string): string {
@@ -173,6 +201,7 @@ function sizeOf(body: unknown): number {
 
 function targetSp(lib: ITargetLib): { sp: ReturnType<typeof createMockSp>['sp']; requests: IMockRequest[] } {
   let seq = 100;
+  const jobs: { [id: string]: string[] } = {};
   const rel = (url: string): string => url.slice(T_LIB.length + 1);
   const mock = createMockSp((req) => {
     let m: RegExpExecArray | null;
@@ -230,6 +259,27 @@ function targetSp(lib: ITargetLib): { sp: ReturnType<typeof createMockSp>['sp'];
     }
     if (req.method === 'GET' && (m = /\/getFileByServerRelativePath\(decodedUrl='([^']+)'\)\/listItemAllFields\?\$select=Id$/i.exec(req.url))) {
       return { body: { Id: lib.files[rel(m[1])].id } };
+    }
+    // Server-side copy (spike 16): one job per URL; an existing path is the job's JobError.
+    if (req.method === 'POST' && /\/_api\/site\/CreateCopyJobs$/i.test(req.url)) {
+      const b = req.body as { exportObjectUris: string[]; destinationUri: string; options: { IgnoreVersionHistory: boolean } };
+      const folder = b.destinationUri.replace(/^https:\/\/[^/]+/, '');
+      return {
+        body: {
+          value: b.exportObjectUris.map((from) => {
+            (lib.copies = lib.copies || []).push({ from, to: folder, versions: !b.options.IgnoreVersionHistory });
+            const path = (folder === T_LIB ? '' : `${rel(folder)}/`) + from.split('/').pop();
+            const exists = !!lib.files[path];
+            if (!exists) lib.files[path] = { id: ++seq, uploads: [], values: {} };
+            const logs: object[] = exists ? [{ Event: 'JobError', ErrorCode: '-2147024713', Message: 'Már létezik' }] : [{ Event: 'JobFinishedObjectInfo' }];
+            jobs[`j${seq}-${path}`] = logs.concat([{ Event: 'JobEnd', MigrationDirection: 'Import' }]).map((l) => JSON.stringify(l));
+            return { JobId: `j${seq}-${path}`, JobQueueUri: 'q' };
+          })
+        }
+      };
+    }
+    if (req.method === 'POST' && /\/_api\/site\/GetCopyJobProgress$/i.test(req.url)) {
+      return { body: { JobState: 0, Logs: jobs[(req.body as { copyJobInfo: { JobId: string } }).copyJobInfo.JobId] } };
     }
     if (req.method === 'POST' && (m = /\/getList\('[^']+'\)\/items\((\d+)\)\/validateupdatelistitem$/i.exec(req.url))) {
       const f = Object.keys(lib.files).map((p) => lib.files[p]).filter((x) => x.id === Number(m![1]))[0];
@@ -310,5 +360,60 @@ describe('FileProvider', () => {
     // An empty stub first, then startUpload with a full chunk and finishUpload with the rest.
     expect(lib.files['nagy.bin'].uploads).toEqual([0, CHUNK_SIZE + 5]);
     expect(lib.chunks).toEqual(['startUpload@0', `finishUpload@${CHUNK_SIZE}`]);
+  });
+
+  it('copies files by reference on the server within the tenant, then sets their metadata', async () => {
+    const reader = await extractPackage(new Logger(), true);
+    const lib: ITargetLib = { files: {}, folders: ['Forms'], chunks: [] };
+    const target = targetSp(lib);
+    const provider = new FileProvider({ copyPollMs: 0 });
+    const fromSource = listFilesDefs(reader.manifest)[0];
+
+    // The template's source is on contoso; this target is on fabrikam.
+    const elsewhere = installContext(reader, target.sp);
+    expect(await provider.diff(target.sp, fromSource, elsewhere)).toMatchObject({ status: 'unsupported', changes: ['otherTenant'] });
+    expect(await provider.apply(target.sp, fromSource, 'skip', elsewhere)).toMatchObject({ outcome: 'skipped' });
+    expect(lib.copies).toBeUndefined();
+
+    // Same tenant (the source origin is the target's).
+    const def: IListFilesDef = { ...fromSource, reference: { origin: 'https://fabrikam.sharepoint.com', includeVersions: true } };
+    const ctx = installContext(reader, target.sp);
+    expect(await provider.apply(target.sp, def, 'skip', ctx)).toMatchObject({ outcome: 'created' });
+    expect(lib.folders).toEqual(['Forms', '2026']);
+    expect(lib.copies).toEqual([
+      { from: `https://fabrikam.sharepoint.com${LIB}/Kép.png`, to: T_LIB, versions: true },
+      { from: `https://fabrikam.sharepoint.com${LIB}/nagy.bin`, to: T_LIB, versions: true },
+      { from: `https://fabrikam.sharepoint.com${LIB}/2026/jelentés.docx`, to: `${T_LIB}/2026`, versions: true }
+    ]);
+    expect(Object.keys(lib.files).every((p) => lib.files[p].uploads.length === 0)).toBe(true);
+    expect(lib.files['2026/jelentés.docx'].values).toMatchObject({ Author: `[{"Key":"${ANNA}"}]`, Created: '2026. 01. 15. 11:00', Modified: '2026. 03. 01. 10:00' });
+    expect(ctx.content!.idMaps.Shared_Documents).toEqual({ 1: 101, 5: 102, 3: 103 });
+    expect(ctx.log.entries.filter((e) => e.level === 'info').map((e) => e.message)).toContain('Files copied by reference: 3 of 3.');
+
+    // Rerun: everything is there, no copy job starts.
+    const again = installContext(reader, target.sp);
+    expect(await provider.apply(target.sp, def, 'skip', again)).toMatchObject({ outcome: 'skipped' });
+    expect(lib.copies!.length).toBe(3);
+  });
+
+  it('keeps a file the copy finds already there (another run in between)', async () => {
+    const reader = await extractPackage(new Logger(), true);
+    const lib: ITargetLib = { files: {}, folders: ['Forms', '2026'], chunks: [] };
+    const target = targetSp(lib);
+    const def: IListFilesDef = { ...listFilesDefs(reader.manifest)[0], reference: { origin: 'https://fabrikam.sharepoint.com', includeVersions: false } };
+    const ctx = installContext(reader, target.sp);
+    // The library looks empty when listed, but Kép.png lands before the copy.
+    const provider = new FileProvider({ copyPollMs: 0 });
+    const diff = provider.diff.bind(provider);
+    provider.diff = async (...args) => {
+      const r = await diff(...args);
+      lib.files['Kép.png'] = { id: 1, uploads: [], values: {} };
+      return r;
+    };
+    await provider.apply(target.sp, def, 'skip', ctx);
+    expect(lib.files['Kép.png'].values).toEqual({});
+    expect(ctx.content!.idMaps.Shared_Documents).toEqual({ 5: 101, 3: 102 });
+    expect(ctx.log.entries.map((e) => e.code)).toContain('FILES_KEPT');
+    expect(lib.copies!.every((c) => !c.versions)).toBe(true);
   });
 });

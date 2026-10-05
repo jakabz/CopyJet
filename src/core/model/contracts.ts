@@ -40,6 +40,8 @@ export interface IExtractOptions {
   versionsFor?: string[];
   /** Files larger than this stay out of the package, with a warning (default 250 MB). */
   maxFileBytes?: number;
+  /** Library files are copied by reference (same tenant, spike 16): the package lists them, without content. */
+  fileLinks?: boolean;
   /** Source-site values to tokenize (site URLs, list GUIDs → {listkey:X} ...). */
   tokens: TokenContext;
   log: Logger;

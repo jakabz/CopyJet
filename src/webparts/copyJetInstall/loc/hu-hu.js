@@ -137,6 +137,7 @@ define([], function() {
     "PhaseFiles": "Fájlok ({0})",
     "ContentFiles": " · {0} fájl (kb. {1} MB)",
     "ReasontargetHasFiles": "a céltárban már vannak fájlok – csak a hiányzók kerülnek fel, felülírás nélkül",
+    "ReasonotherTenant": "a fájlok hivatkozással jönnek egy másik tenant site-járól – csak a forrás tenantjában telepíthetők, itt kimaradnak",
     "KindItems": "Listaelemek",
     "KindItemLookups": "Lookup-értékek",
     "PhaseItems": "Listaelemek ({0})",

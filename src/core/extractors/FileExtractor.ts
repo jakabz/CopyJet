@@ -3,7 +3,7 @@ import '@pnp/sp/webs';
 import '@pnp/sp/files';
 import '@pnp/sp/site-users/web';
 import { throwIfAborted } from '../errors';
-import { DEFAULT_MAX_FILE_BYTES, fileEntryPath, fileVersionEntryPath, filesFolderPath, filesKey, filesMetaPath, type IListFilesDef } from '../files';
+import { DEFAULT_MAX_FILE_BYTES, fileEntryPath, fileVersionEntryPath, filesFolderPath, filesKey, filesMetaPath, urlOrigin, type IListFilesDef } from '../files';
 import { limitConcurrency } from '../http/concurrency';
 import { PrincipalCollector, SITE_USER_SELECT, forEachItemPage, itemSelect, readSourceColumns, toTemplateItem, type ISiteUserLike, type RawItem } from '../items';
 import { loadSourceSite } from '../lists';
@@ -28,6 +28,8 @@ interface IVersionInfoLike {
  * Files of document libraries (spike 10 A): current content, metadata like list items and, per library on
  * request, earlier versions. Written to files/<listkey>/_meta.json plus one entry per file (version).
  * Selected through 'files:<listkey>' refs; the library must already be in the template.
+ * With `fileLinks` (reference mode, spike 16) only _meta.json is written, each file with its source URL: the
+ * install copies them on the server (same tenant only), versions included when asked.
  */
 export class FileExtractor implements IExtractor<IListFilesDef> {
   public readonly kind = 'files' as const;
@@ -49,6 +51,8 @@ export class FileExtractor implements IExtractor<IListFilesDef> {
     const principals = new PrincipalCollector(out.manifest.principals, users);
     const terms = new TermCollector((out.manifest.terms = out.manifest.terms || []), new TermStoreClient(sp));
     const maxBytes = opts.maxFileBytes || DEFAULT_MAX_FILE_BYTES;
+    const links = !!opts.fileLinks;
+    const origin = links ? urlOrigin(opts.tokens.get('site') || '') : '';
 
     for (const l of site.lists.filter((x) => wanted.indexOf(filesKey(x.key)) >= 0)) {
       throwIfAborted(opts.signal);
@@ -81,20 +85,41 @@ export class FileExtractor implements IExtractor<IListFilesDef> {
                 opts.log.warn(`${path} is checked out; it is skipped.`, { artifact: ref, code: 'FILE_CHECKED_OUT', detail: path });
                 return;
               }
-              if (size > maxBytes) {
+              if (!links && size > maxBytes) {
                 opts.log.warn(`${path} (${Math.round(size / 1048576)} MB) is larger than the limit; it is skipped.`, { artifact: ref, code: 'FILE_TOO_LARGE', detail: { path, size } });
                 return;
               }
-              const entry: FileEntry = { path, blob: fileEntryPath(l.key, path), sizeBytes: size, sourceId: item.sourceId, values: item.values };
+              const entry: FileEntry = links
+                ? { path, sourceUrl: String(raw.FileRef), sizeBytes: size, sourceId: item.sourceId, values: item.values }
+                : { path, blob: fileEntryPath(l.key, path), sizeBytes: size, sourceId: item.sourceId, values: item.values };
               if (item.contentType) entry.contentType = item.contentType;
               if (item.system) entry.system = item.system;
-              if (entry.blob !== `files/${l.key}/${path}`) {
+              if (entry.blob && entry.blob !== `files/${l.key}/${path}`) {
                 opts.log.warn(`${path} is stored in the package as ${entry.blob} (".." is not allowed in package paths).`, { artifact: ref, code: 'FILE_RENAMED', detail: path });
               }
               found.push({ raw, entry });
             }),
         opts.signal
       );
+
+      if (links) {
+        const files = found.map((f) => f.entry);
+        const sizeBytes = files.reduce((n, f) => n + f.sizeBytes, 0);
+        out.addJson(filesMetaPath(l.key), { listKey: l.key, files } as IFilesMetaFile);
+        listDef.content = {
+          mode: 'files',
+          sourceMode: 'reference',
+          includeVersions: withVersions,
+          fileCount: files.length,
+          sizeBytes,
+          source: filesFolderPath(l.key),
+          // The schema wants a URI (no raw spaces); only its origin is used at install.
+          sourceUrl: encodeURI(`${origin}${listUrl}`)
+        };
+        out.manifest.meta.includesContent = true;
+        opts.log.info(`Files listed for copying by reference: ${files.length} (${Math.round(sizeBytes / 1024)} KB)${withVersions ? ', with their versions' : ''}.`, { artifact: ref });
+        continue;
+      }
 
       const results = await limitConcurrency(
         found.map((f) => () => this._download(sp, l.key, f.raw, f.entry.path, f.entry.blob!, withVersions, principals, opts, out)),

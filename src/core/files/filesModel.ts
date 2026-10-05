@@ -10,6 +10,14 @@ export interface IListFilesDef {
   source: string;
   /** Keys of lists the library's lookup columns point to (itself included). */
   lookupTargets: string[];
+  /** Reference mode (spike 16): the files are copied on the server from the source tenant, not uploaded. */
+  reference?: IFilesReference;
+}
+
+export interface IFilesReference {
+  /** Origin of the source site (https://tenant.sharepoint.com); file entries carry server-relative URLs. */
+  origin: string;
+  includeVersions: boolean;
 }
 
 /** Up to this size a file is uploaded in one request, above it in chunks of this size (rendszerterv §7). */
@@ -36,9 +44,19 @@ export function fileVersionEntryPath(listKey: string, label: string, path: strin
   return `files/${listKey}/_v/${label}/${safe(path)}`;
 }
 
-/** Libraries of the template whose files are in the package (embedded mode). */
+/** Origin (scheme and host) of an absolute URL; empty when the URL is not absolute. */
+export function urlOrigin(url: string): string {
+  const m = /^(https?:\/\/[^/?#]+)/i.exec(url || '');
+  return m ? m[1].toLowerCase() : '';
+}
+
+/** Libraries of the template carrying files: in the package (embedded) or by source URL (reference). */
 export function listFilesDefs(template: ICopyJetTemplate): IListFilesDef[] {
   return template.lists
-    .filter((l) => l.content && l.content.mode === 'files' && l.content.sourceMode !== 'reference' && !!l.content.source)
-    .map((l) => ({ listKey: l.key, listUrl: l.url, source: filesMetaPath(l.key), lookupTargets: lookupTargets(l) }));
+    .filter((l) => l.content && l.content.mode === 'files' && !!l.content.source)
+    .map((l) => {
+      const def: IListFilesDef = { listKey: l.key, listUrl: l.url, source: filesMetaPath(l.key), lookupTargets: lookupTargets(l) };
+      if (l.content.sourceMode === 'reference') def.reference = { origin: urlOrigin(l.content.sourceUrl || ''), includeVersions: !!l.content.includeVersions };
+      return def;
+    });
 }
