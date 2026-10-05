@@ -413,9 +413,9 @@ Az Install ötlépéses varázsló (Betöltés → Leképezés → Előnézet �
 | Egység | `tokenizer`, `planner`, `schema`, `FieldValueSerializer`, `mapping` | Jest, PnPjs mock (saját `MockQueryable`) |
 | Szerződés | Extractor → sablon → provider kör: ugyanaz a modell jön vissza | Jest, rögzített REST-válaszok (fixture JSON) |
 | Integráció | Valódi forrás- és cél-site, azonos és külön tenant | Debug Toolbar / tesztlap, szkriptelt ellenőrző lista |
-| Regresszió | Mintasablonok (`tests/templates/*.zip`) telepítése üres site-ra | Kézi, kiadásonként |
+| Regresszió | A teljes mintasablon és a valódi exportok (`tests/fixtures/templates/`) végigvitele: megnyitás, terv, futás, újrafuttatás, folytatás (`tests/regression/`) | Jest, minden buildnél |
 
-Integrációs tesztesetek: lookup-lánc és ciklus, 6000+ elemű lista, 100 MB-os fájl, verziózott tár, lap lista- és kép-webparttal, magyar ↔ angol nyelvű site, hiányzó felhasználó, megszakított és folytatott telepítés.
+Integrációs tesztesetek (forgatókönyv, tesztadat-generátor és eredménytábla: `docs/03-integracios-tesztek.md`): lookup-lánc és ciklus, 6000+ elemű lista, 100 MB-os fájl, verziózott tár, lap lista- és kép-webparttal, magyar ↔ angol nyelvű site, hiányzó felhasználó, megszakított és folytatott telepítés.
 
 **Build és telepítés**
 
@@ -464,10 +464,11 @@ A fejlesztés a rendszerterv fázisait követi; minden fázis végén működő,
 - [x] `state` (`CopyJetLog`), folytatás, `ResumeBanner` (`docs/spikes/14`; félbemaradt elemírás folytatása, menet közbeni mentés) – SharePointon ellenőrizve 2026-10-05 (Leállítás, lapbezárás, lezárt futás); az elemírás közbeni megszakítás felismerése (`ITEMS_RESUME_RECOVERED`) csak egységtesztben
 - [x] `ListSecurityExtractor` / `ListSecurityProvider` (`docs/spikes/15`) – valódi telepítéssel ellenőrizve (1.9.2.0)
 - [x] Hivatkozásos fájlmásolás azonos tenanton (`createCopyJobs`, `docs/spikes/16`) – valódi telepítéssel ellenőrizve (1.10.0.0)
-- [ ] Integrációs és regressziós tesztkészlet, felhasználói leírás
+- [x] Integrációs és regressziós tesztkészlet, felhasználói leírás: `tests/regression/` (automatikus), `docs/03-integracios-tesztek.md` (kézi forgatókönyv tesztadat-generátorral), `docs/04-felhasznaloi-leiras.md` – az integrációs forgatókönyv első teljes futtatása hátravan
 
 **5. fázis – Bővítések (később)**
 
+- [ ] Futás visszavonása: a napló alapján az adott futásban létrehozott artefaktumok törlése, megerősítés után (rendszerterv 10. fejezet; a 4. fázisból áthelyezve)
 - [ ] Cél site létrehozása az Install-ból
 - [ ] Hub-navigáció, további listatípusok
 - [ ] Egyedi SPFx-megoldások (webpartok, extensionök) telepítése a célra: a lapon lévő egyedi webpart (`requiredWebParts`, `isCustom`) és a site-on használt extensionök `.sppkg`-jának felderítése a forrás app catalogjából, a sablonban jelölése, és az Install-ban a site-ra telepítése (`app add/install`), ha a célon elérhető; különben figyelmeztetés

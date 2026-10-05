@@ -37,7 +37,7 @@ define([], function() {
     "ChecksumMismatchNote": "A sablon tartalma nem egyezik az elkészítéskor rögzített ellenőrzőösszeggel: a fájl utólag módosult vagy sérült. A telepítés folytatható, de csak akkor, ha tudod, ki és miért módosította.",
     "ContentSummary": "{0} lista/tár · {1} oszlop · {2} nézet",
     "Warning": "Figyelmeztetés",
-    "TenantDiffers": "A forrás tenant eltér a céltól – a felhasználó- és term-hivatkozások leképezése a 2. fázisban érkezik.",
+    "TenantDiffers": "A forrás tenant eltér a céltól – a felhasználókat és a termeket a Leképezés lépésben párosítod; a hivatkozással másolt fájlok itt kimaradnak.",
     "PermissionsChecking": "Jogosultságok ellenőrzése…",
     "PermissionsMissing": "A telepítéshez tulajdonosi jog kell ezen a site-on",
     "PermissionsMissingDetail": "Hiányzik: {0}",

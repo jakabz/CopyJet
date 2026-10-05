@@ -3,7 +3,7 @@
   "items": [
     {
       "sourceId": 1,
-      "contentType": "Projekt",
+      "contentType": "0x0100A1B2C3D4E5F60718293A4B5C6D7E8F90",
       "values": {
         "Title": "ERP bevezetés",
         "CJ_Status": "Folyamatban",
@@ -21,7 +21,7 @@
     },
     {
       "sourceId": 2,
-      "contentType": "Projekt",
+      "contentType": "0x0100A1B2C3D4E5F60718293A4B5C6D7E8F90",
       "values": {
         "Title": "Webshop megújítás",
         "CJ_Status": "Nyitott",

@@ -1,0 +1,42 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`full example template plans every artifact of the template, dependencies first 1`] = `
+[
+  [
+    "group:PM",
+    "field:CJ_Status",
+    "field:CJ_Terulet",
+    "list:Dokumentumok",
+    "list:Ugyfelek",
+  ],
+  [
+    "contentType:0x0100A1B2C3D4E5F60718293A4B5C6D7E8F90",
+    "view:Dokumentumok/Minden dokumentum",
+    "view:Ugyfelek/Minden elem",
+    "items:Ugyfelek",
+    "files:Dokumentumok",
+  ],
+  [
+    "list:Projektek",
+  ],
+  [
+    "listField:Projektek/Felelos",
+    "listField:Projektek/Ugyfel",
+  ],
+  [
+    "view:Projektek/Minden elem",
+    "view:Projektek/Nyitott projektek",
+    "items:Projektek",
+  ],
+  [
+    "itemLookups:Projektek",
+  ],
+  [
+    "page:Home.aspx",
+  ],
+  [
+    "navigation:homePage",
+    "navigation:quickLaunch",
+  ],
+]
+`;

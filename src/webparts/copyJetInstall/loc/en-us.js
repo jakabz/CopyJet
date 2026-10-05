@@ -37,7 +37,7 @@ define([], function() {
     "ChecksumMismatchNote": "The template content does not match the checksum recorded when it was made: the file was changed or damaged afterwards. You can continue, but only if you know who changed it and why.",
     "ContentSummary": "{0} lists · {1} columns · {2} views",
     "Warning": "Warning",
-    "TenantDiffers": "The source tenant differs from the target – mapping users and terms arrives in phase 2.",
+    "TenantDiffers": "The source tenant differs from the target – match users and terms in the Mapping step; files copied by reference are skipped here.",
     "PermissionsChecking": "Checking permissions…",
     "PermissionsMissing": "Installing needs owner permissions on this site",
     "PermissionsMissingDetail": "Missing: {0}",

@@ -290,7 +290,7 @@ Minden telepítési lépés idempotens: újrafuttatáskor a már létező artefa
 - **Állapotmentés:** a `state` modul a cél site `CopyJetLog` listájába írja a futás azonosítóját, a kész lépéseket és az ID-leképezéseket; böngészőbezárás után is folytatható.
 - **Throttling:** 429/503 válasznál `Retry-After` szerinti várakozás, különben exponenciális visszalépés (max. 5 próba); a párhuzamosság 4-re korlátozva, `User-Agent` dekorációval (`NONISV|CopyJet|1.0`).
 - **Hibaszintek:** *hiba* (lépés sikertelen, a tőle függő lépések kimaradnak), *figyelmeztetés* (pl. nem létező felhasználó, kivételezett fájl), *info*.
-- **Nincs automatikus visszagörgetés:** törlés adatvesztéssel járhat; ehelyett a napló listázza a létrehozott artefaktumokat, és egy külön „Futás visszavonása” funkció megerősítés után törli őket (4. fázis).
+- **Nincs automatikus visszagörgetés:** törlés adatvesztéssel járhat; ehelyett a napló listázza a létrehozott artefaktumokat, és egy külön „Futás visszavonása” funkció megerősítés után törli őket (5. fázis).
 - **Napló export:** CSV / JSON letöltés, lépésenként időbélyeggel, artefaktummal, eredménnyel és hibaüzenettel.
 - **Setup oldali hibák:** olvashatatlan lista vagy fájl esetén a sablon elkészül, a hiány a `meta.warnings` tömbbe kerül.
 
@@ -321,8 +321,8 @@ A legnagyobb kockázat a böngészőben futó hosszú művelet: nagy tartalomná
 | 1 – Szerkezet (MVP) | Site columnok, tartalomtípusok, listák, tárak, nézetek, lookupok, SP-csoportok; Setup fa + Install előnézet | Szerkezetmásolás bármely tenantba |
 | 2 – Tartalom | Listaelemek, mappák, mellékletek, fájlok, ID-, felhasználó- és term-leképezés, opcionális verzióelőzmény | Teljes másolás tartalommal |
 | 3 – Lapok és navigáció | Modern lapok, webpart-tokenizálás, SiteAssets, bal oldali és felső menü | Teljes site-kinézet átvitele |
-| 4 – Robusztusság | Folytatás, futás visszavonása, listajogosultságok, hivatkozásos mód azonos tenantra | Éles használatra kész |
-| 5 – Bővítések | Cél site létrehozása, hub-navigáció, további listatípusok | Opcionális |
+| 4 – Robusztusság | Folytatás, listajogosultságok, hivatkozásos mód azonos tenantra | Éles használatra kész |
+| 5 – Bővítések | Futás visszavonása, cél site létrehozása, hub-navigáció, további listatípusok | Opcionális |
 
 **Tesztelés:** Jest egységtesztek a planner, tokenizer és séma számára; integrációs tesztek egy dedikált forrás- és cél-site páron, azonos tenanton és két külön tenant között is (lookup-lánc, 6000+ elemű lista, 100 MB-os fájl, verziózott tár, lapok listát és képet használó webpartokkal, magyar és angol nyelvű site).
 
