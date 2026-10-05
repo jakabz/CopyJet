@@ -77,6 +77,8 @@ export interface IContentContext {
   reader: ITemplateReader;
   /** Source item ID → target item ID per list key; fills as item steps run, used to resolve lookups. */
   idMaps: { [listKey: string]: { [sourceId: number]: number } };
+  /** Source IDs of the item chunk being written per list key, saved before the write (resume, spike 14). */
+  pendingItems?: { [listKey: string]: number[] };
   /** Template principals → target users ({principal:key} tokens). */
   principals: PrincipalMapper;
   /** Template terms → target terms (Managed Metadata values); without it those values are not written. */
@@ -91,6 +93,8 @@ export interface IInstallContext {
   signal?: AbortSignal;
   /** Present when the template carries content (items, files). */
   content?: IContentContext;
+  /** Saves the run state in the middle of a long step (the install sets it; content providers call it per chunk). */
+  checkpoint?: () => Promise<void>;
 }
 
 export interface IProvider<TDef> {

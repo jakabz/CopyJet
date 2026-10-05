@@ -7,6 +7,7 @@ import type { Logger } from '../../../core/logger';
 import { TermMapper, type PrincipalMapper } from '../../../core/mapping';
 import type { ArtifactKind, ConflictMode, IInstallContext, ITemplateReader } from '../../../core/model';
 import { buildPlan, type IPlanStep } from '../../../core/planner';
+import { finishedSteps, restoreRunState, RunTracker, SpRunStore, templateChecksum, type IRunState } from '../../../core/state';
 import { LogViewer } from '../../../shared/components/LogViewer';
 import { Message, ProgressBar, Stats, ui } from '../../../shared/components/ui';
 import { format, kindLabel, logLabels, stepTitle } from './labels';
@@ -24,6 +25,8 @@ export interface IInstallRunProps {
   mode: ConflictMode;
   modes: { [key: string]: ConflictMode };
   logger: Logger;
+  /** An earlier unfinished run to resume: its finished steps are not run again. */
+  resume?: IRunState;
   /** 'progress' = step 4 (install), 'result' = step 5. */
   view: 'progress' | 'result';
   onStatus: (status: RunStatus, stop: () => void) => void;
@@ -49,7 +52,7 @@ const FAILED: StepStatus[] = ['failed', 'blocked', 'cancelled'];
 const duration = (ms: number): string => format(strings.Duration, Math.floor(ms / 60000), Math.floor((ms % 60000) / 1000));
 
 /** Steps 4–5 (docs/ui install-4, install-5): the run with phases, progress and log, then the result. */
-export const InstallRun: React.FC<IInstallRunProps> = ({ sp, reader, principals, targetSiteTitle, disabled, mode, modes, logger, view, onStatus }) => {
+export const InstallRun: React.FC<IInstallRunProps> = ({ sp, reader, principals, targetSiteTitle, disabled, mode, modes, logger, resume, view, onStatus }) => {
   const template = reader.manifest;
   const plan = React.useMemo(() => buildPlan(template, { disabled }), [template, disabled]);
   const [statuses, setStatuses] = React.useState<{ [key: string]: StepStatus }>({});
@@ -75,14 +78,27 @@ export const InstallRun: React.FC<IInstallRunProps> = ({ sp, reader, principals,
       onStatus('finished', () => undefined);
     };
     // Terms are mapped afresh for the run (no rules to keep): a term deleted since the preview is seen as missing.
-    createInstallContext(sp, logger, ac.signal, { reader, principals, terms: new TermMapper(sp, reader.manifest.terms || []) })
-      .then((c) => {
+    let tracker: RunTracker | undefined;
+    Promise.all([
+      createInstallContext(sp, logger, ac.signal, { reader, principals, terms: new TermMapper(sp, reader.manifest.terms || []) }),
+      templateChecksum(reader.storedManifest)
+    ])
+      .then(([c, checksum]) => {
+        if (resume) {
+          restoreRunState(resume, c);
+          logger.info(`Resuming run ${resume.runId}: ${Object.keys(finishedSteps(resume)).length} finished steps are not run again.`, { code: 'RUN_RESUMED', detail: resume.runId });
+        }
+        // The run state goes to the target's CopyJetLog list after every step (docs/spikes/14).
+        tracker = RunTracker.start(new SpRunStore(sp, logger), c, template.meta.name, checksum, resume);
+        c.checkpoint = tracker.checkpoint;
         setCtx(c);
         setCurrent(plan.steps[0]);
         return runPlan(sp, plan, c, {
           providers: createProviders(),
           mode,
           modes,
+          previous: resume ? finishedSteps(resume) : undefined,
+          onStepDone: tracker.stepDone,
           onProgress: (e) => {
             setStatuses((s) => ({ ...s, [e.ref.key]: e.status }));
             setCurrent(plan.steps[e.done]);
@@ -90,13 +106,20 @@ export const InstallRun: React.FC<IInstallRunProps> = ({ sp, reader, principals,
         });
       })
       .then(
-        (r) => {
+        async (r) => {
+          const bad = r.counts.failed + r.counts.blocked + r.counts.cancelled;
+          if (tracker) {
+            await tracker.finish(r.aborted ? 'aborted' : bad ? 'failed' : 'completed').catch((e: unknown) =>
+              logger.warn(`The run state could not be saved: ${e instanceof Error ? e.message : String(e)}`, { code: 'STATE_SAVE_FAILED' })
+            );
+          }
           setResult(r);
           done();
         },
         (e: unknown) => {
           const message = e instanceof Error ? e.message : String(e);
           logger.error(message, { code: 'INSTALL_FAILED' });
+          if (tracker) tracker.finish('failed').catch(() => undefined);
           setError(message);
           done();
         }
@@ -111,7 +134,7 @@ export const InstallRun: React.FC<IInstallRunProps> = ({ sp, reader, principals,
   const doneCount = Object.keys(statuses).length;
 
   if (view === 'result' && (result || error)) {
-    const counts = result ? result.counts : { created: 0, updated: 0, skipped: 0, failed: 1, blocked: 0, cancelled: 0 };
+    const counts = result ? result.counts : { created: 0, updated: 0, skipped: 0, failed: 1, blocked: 0, cancelled: 0, previous: 0 };
     const failed = counts.failed + counts.blocked;
     const created = result ? result.steps.filter((s) => s.status === 'created') : [];
     const siteUrl = ctx ? ctx.targetSiteUrl.replace(/\/+$/, '') : '';
@@ -133,6 +156,7 @@ export const InstallRun: React.FC<IInstallRunProps> = ({ sp, reader, principals,
             { label: strings.StatCreated, value: counts.created, tone: 'good' },
             { label: strings.StatUpdated, value: counts.updated },
             { label: strings.StatSkipped, value: counts.skipped },
+            ...(counts.previous ? [{ label: strings.StatPrevious, value: counts.previous }] : []),
             { label: strings.StatWarnError, value: `${logger.counts.warn} / ${failed}`, tone: logger.counts.warn || failed ? 'warn' : undefined }
           ]}
         />

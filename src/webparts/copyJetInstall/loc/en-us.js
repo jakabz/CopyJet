@@ -180,6 +180,13 @@ define([], function() {
     "LogInfo": "info",
     "LogWarn": "warning",
     "LogError": "error",
-    "LogEmpty": "No entries yet."
+    "LogEmpty": "No entries yet.",
+    "ResumeTitle": "An unfinished installation of this template",
+    "ResumeText": "Started {0}, last saved {1}. Finished steps: {2}, failed or interrupted: {3}. A resume does not run the finished steps again.",
+    "ResumeContinue": "Resume",
+    "ResumeNew": "New installation",
+    "ResumeChosen": "The installation resumes the earlier run.",
+    "ResumeCheckFailed": "Earlier runs could not be read: {0}",
+    "StatPrevious": "Done in the earlier run"
   }
 });

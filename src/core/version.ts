@@ -1,5 +1,5 @@
 /** CopyJet version written into templates (meta.generator.version) and request tags. Keep in sync with package.json. */
-export const COPYJET_VERSION = '0.7.0';
+export const COPYJET_VERSION = '0.8.2';
 
 /** The solution package version (config/package-solution.json), shown in the webparts' footer. */
-export const SOLUTION_VERSION = '1.7.0.0';
+export const SOLUTION_VERSION = '1.8.2.0';

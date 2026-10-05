@@ -169,10 +169,22 @@ Ez a három modul az infrastruktúra: minden SharePoint-hívás a `http`-n, mind
 
 **`state`**
 
-- `CopyJetLog` lista a cél site-on (rejtett, csak tulajdonosoknak), az első telepítéskor jön létre.
-- Egy futás = egy elem: `RunId`, `TemplateName`, `Checksum`, `Status`, `CompletedSteps` (JSON), `IdMaps` (JSON melléklet).
-- `saveProgress(runId, step)` minden lépés után; `loadRun(checksum)` újraindításkor felajánlja a folytatást.
-- Az ID-leképezések mellékletként kerülnek mentésre, mert méretük meghaladhatja a mezőkorlátot.
+- **`CopyJetLog` lista** a cél site-on (`SpRunStore`, `docs/spikes/14`):
+  - rejtett és nem indexelt;
+  - öröklés nélkül: csak a futtató és a tulajdonoscsoport, Teljes hozzáféréssel;
+  - az első mentéskor jön létre.
+- **Egy futás = egy elem:**
+  - oszlopok: `CJRunId`, `CJTemplate`, `CJChecksum`, `CJStatus` (`running` / `completed` / `failed` / `aborted`);
+  - a teljes `IRunState` (kész lépések, tokenek, `idMaps`) a `state.json` mellékletben, minden mentéskor helyben felülírva.
+- **`RunTracker`:**
+  - `stepDone` a `runPlan` `onStepDone` hookjába kerül, `checkpoint` az `IInstallContext.checkpoint`-ba (elemírásnál 500 elemenként, fájloknál 25-önként);
+  - a mentések sorba rendeződnek és összevonódnak;
+  - sikertelen mentés: egyszeri figyelmeztetés (`STATE_SAVE_FAILED`), a telepítés megy tovább.
+- **Folytatás:**
+  - `findUnfinished(checksum)` a sablon azonosítójára (`templateChecksum`: a manifest SHA-256-ja `meta.checksum` nélkül) keres;
+  - `restoreRunState` visszatölti a tokeneket és az ID-leképezéseket; a site saját tokenjei és a `{principal:…}` értékek az aktuális munkamenetből jönnek;
+  - `finishedSteps` adja a `runPlan` `previous` paraméterét.
+  - Elemírásnál a következő csomag forrásazonosítói írás előtt mentődnek (`IContentContext.pendingItems`). Folytatáskor a feljegyzés nélküli célelemek ID-sorrendben, címellenőrzéssel ehhez párosulnak (`ITEMS_RESUME_RECOVERED`), különben a lista érintetlen marad (`ITEMS_RESUME_UNKNOWN_ITEMS`).
 
 ## 5. Core: tokenizer és mapping
 
@@ -311,7 +323,7 @@ A `planner` a sablonból függőségi gráfot épít és lépéssort készít; a
 - **Zárolás:** az azonos sémát módosító lépések (ugyanannak a listának az oszlopai és nézetei, a web site columnjai, a web tartalomtípusai – `IPlanStep.lock`) egymás után futnak, a különbözők párhuzamosan. Az első valódi telepítésen a párhuzamos lista-sémamódosítás véletlenszerű HTTP 500-akat adott (0x8007047E, 0x80131904).
 - Minden lépés: `provider.apply` → tokenek regisztrálása → `state.saveProgress` → `logger`.
 - Hiba esetén a lépés `failed`, a függő lépések `blocked`, a függetlenek futnak tovább.
-- `AbortController` a leállításhoz; `resume(runId)` a kész lépéseket kihagyja, a tokeneket és `IdMap`-eket a `state`-ből tölti vissza.
+- `AbortController` a leállításhoz. Folytatáskor (`previous`) az előző futásban kész (`created` / `updated` / `skipped`) lépések `previous` állapotot kapnak és nem futnak; a hibás, letiltott és megszakadt lépések újra lefutnak. Az előző futásban létrehozott szülő alatt a lépés továbbra is `update` módban fut. Minden lefutott lépés után `onStepDone` (állapotmentés).
 - `onProgress` események: `{ done, total, ref, status }` (a bájtalapú mezők a 2. fázisban, a fájloknál jönnek).
 - `diffPlan(sp, plan, ctx, providers)` – az előnézethez: minden lépés diffje; ha egy függőség `new`, a lépés is `new`, a célt nem kérdezzük (egy új lista mezőjére a „lista hiányzik” félrevezető lenne).
 - `createProviders()` / `createExtractors()` (`engine/registry.ts`) – az 1. fázis párjai; `createInstallContext(sp, log)` – a cél site és az alapcsoportok tokenjei.
@@ -371,7 +383,7 @@ Az Install ötlépéses varázsló (Betöltés → Leképezés → Előnézet �
 | Komponens | Feladat | Megoldás |
 | --- | --- | --- |
 | `CopyJetInstallWebPart.ts` | Belépési pont, property pane | Jogosultság-ellenőrzés: `web.getCurrentUserEffectivePermissions()` → ManageLists, ManageWeb, ManagePermissions |
-| `ResumeBanner` | Félbemaradt futás felajánlása | `state.loadRun()`; „Folytatás” / „Új telepítés” |
+| `ResumeBanner` | Félbemaradt futás felajánlása | `SpRunStore.findUnfinished(checksum)` a sablon betöltése után (az Előkészítés lépésben); „Folytatás” / „Új telepítés”; a választás az `InstallRun` `resume` propjába kerül |
 | `TemplateLoader` | Sablon feltöltése vagy kiválasztása tárból / URL-ről | Saját drag & drop + PnP `FilePicker` (`@pnp/spfx-controls-react`); `TemplateReader.open` + `schema.validateTemplate` + `migrate` |
 | `MappingStep` | Felhasználó- és term-leképezés | Automatikus javaslat a `PrincipalMapper` / `TermMapper` stratégiákkal; szerkeszthető tábla, CSV import; csak ha a forrás tenant eltér vagy hiány van |
 | `PreviewStep` | Diff-eredmények, ütközésmód, tételek ki-/bekapcsolása | Minden provider `diff`-je párhuzamosan; `DetailsList` státusz ikonokkal; globális és tételenkénti `ConflictMode`; hiányzó webpartok listája |
@@ -449,7 +461,7 @@ A fejlesztés a rendszerterv fázisait követi; minden fázis végén működő,
 
 **4. fázis – Robusztusság**
 
-- [ ] `state` (`CopyJetLog`), `resume`, `ResumeBanner`
+- [x] `state` (`CopyJetLog`), folytatás, `ResumeBanner` (`docs/spikes/14`; félbemaradt elemírás folytatása, menet közbeni mentés) – SharePointon ellenőrizve 2026-10-05 (Leállítás, lapbezárás, lezárt futás); az elemírás közbeni megszakítás felismerése (`ITEMS_RESUME_RECOVERED`) csak egységtesztben
 - [ ] `ListSecurityExtractor` / `ListSecurityProvider`
 - [ ] Hivatkozásos fájlmásolás azonos tenanton (`createCopyJobs`)
 - [ ] Integrációs és regressziós tesztkészlet, felhasználói leírás

@@ -180,6 +180,13 @@ define([], function() {
     "LogInfo": "info",
     "LogWarn": "figyelm.",
     "LogError": "hiba",
-    "LogEmpty": "Még nincs bejegyzés."
+    "LogEmpty": "Még nincs bejegyzés.",
+    "ResumeTitle": "Félbemaradt telepítés ennél a sablonnál",
+    "ResumeText": "Indítva: {0}, utoljára mentve: {1}. Kész lépések: {2}, hibás vagy félbemaradt: {3}. Folytatáskor a kész lépések nem futnak újra.",
+    "ResumeContinue": "Folytatás",
+    "ResumeNew": "Új telepítés",
+    "ResumeChosen": "A telepítés az előző futás folytatása lesz.",
+    "ResumeCheckFailed": "Az előző futások nem olvashatók: {0}",
+    "StatPrevious": "Előző futásban kész"
   }
 });

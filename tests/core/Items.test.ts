@@ -197,6 +197,9 @@ function targetSp(
     if (req.method === 'GET' && (m = /\/getList\('([^']+)'\)\/items\?\$filter=FSObjType eq 1&\$select=FileRef/i.exec(req.url))) {
       return { body: list(m[1])!.folders.map((f) => ({ FileRef: `${m![1]}/${f}` })) };
     }
+    if (req.method === 'GET' && (m = /\/getList\('([^']+)'\)\/items\?\$top=5000&\$select=Id,FSObjType,Title$/i.exec(req.url))) {
+      return { body: { value: list(m[1])!.items.map((i) => ({ Id: i.ID, FSObjType: 0, Title: i.Title })) } };
+    }
     if (req.method === 'GET' && (m = /\/getList\('([^']+)'\)\/items\?\$filter=FSObjType eq 0/i.exec(req.url))) {
       return { body: list(m[1])!.items.slice(0, 1).map((i) => ({ Id: i.ID })) };
     }
@@ -348,6 +351,69 @@ describe('ItemProvider + ItemLookupProvider', () => {
     expect(ctx.log.entries.map((e) => e.code)).toEqual(['ITEMS_TARGET_NOT_EMPTY']);
     expect(requests.filter((r) => r.method === 'POST')).toEqual([]);
     expect(lists[T_LOOKUP].items.length).toBe(1);
+  });
+
+  it('resumes into a list holding only items the earlier run recorded, saving the state on the way', async () => {
+    const reader = await extractPackage();
+    const lists = emptyTarget();
+    lists[T_LOOKUP].items.push({ ID: 41, Title: 'Egy' });
+    const { sp } = targetSp(lists);
+    const ctx = installContext(reader, sp);
+    ctx.content!.idMaps.Teszt_lookup_forrs = { 1: 41 };
+    let saves = 0;
+    ctx.checkpoint = async () => {
+      saves++;
+    };
+    const def = listItemsDefs(reader.manifest).filter((d) => d.listKey === 'Teszt_lookup_forrs')[0];
+    expect(await new ItemProvider({ batched: false }).apply(sp, def, 'update', ctx)).toMatchObject({ outcome: 'created' });
+    expect(lists[T_LOOKUP].items.map((i) => i.Title)).toEqual(['Egy', 'Kettő']);
+    expect(ctx.content!.idMaps.Teszt_lookup_forrs[1]).toBe(41);
+    expect(ctx.content!.idMaps.Teszt_lookup_forrs[2]).toBeGreaterThan(100);
+    expect(ctx.log.entries.map((e) => e.code)).toContain('ITEMS_RESUMED');
+    expect(saves).toBe(2); // the chunk before it is written, and after
+    expect(ctx.content!.pendingItems).toEqual({});
+  });
+
+  it('recognizes items written just before an interruption from the saved chunk, by ID order and title', async () => {
+    const reader = await extractPackage();
+    const lists = emptyTarget();
+    // The interrupted run had saved the chunk [1, 2] and written both items, but not their IDs.
+    lists[T_LOOKUP].items.push({ ID: 42, Title: 'Kettő' }, { ID: 41, Title: 'Egy' });
+    const { sp, requests } = targetSp(lists);
+    const ctx = installContext(reader, sp);
+    ctx.content!.idMaps.Teszt_lookup_forrs = {};
+    ctx.content!.pendingItems = { Teszt_lookup_forrs: [1, 2] };
+    const def = listItemsDefs(reader.manifest).filter((d) => d.listKey === 'Teszt_lookup_forrs')[0];
+    await new ItemProvider({ batched: false }).apply(sp, def, 'update', ctx);
+    expect(ctx.content!.idMaps.Teszt_lookup_forrs).toEqual({ 1: 41, 2: 42 });
+    expect(ctx.log.entries.map((e) => e.code)).toEqual(expect.arrayContaining(['ITEMS_RESUME_RECOVERED', 'ITEMS_RESUMED']));
+    expect(requests.filter((r) => /AddValidateUpdateItemUsingPath/i.test(r.url))).toEqual([]);
+    expect(lists[T_LOOKUP].items.length).toBe(2);
+  });
+
+  it('does not take unrecorded items whose titles do not match the saved chunk', async () => {
+    const reader = await extractPackage();
+    const lists = emptyTarget();
+    lists[T_LOOKUP].items.push({ ID: 41, Title: 'Valami más' });
+    const { sp } = targetSp(lists);
+    const ctx = installContext(reader, sp);
+    ctx.content!.pendingItems = { Teszt_lookup_forrs: [1, 2] };
+    const def = listItemsDefs(reader.manifest).filter((d) => d.listKey === 'Teszt_lookup_forrs')[0];
+    expect(await new ItemProvider({ batched: false }).apply(sp, def, 'update', ctx)).toMatchObject({ outcome: 'skipped' });
+    expect(ctx.log.entries.map((e) => e.code)).toEqual(['ITEMS_RESUME_UNKNOWN_ITEMS', 'ITEMS_TARGET_NOT_EMPTY']);
+  });
+
+  it('does not resume when the list has an item the earlier run did not record', async () => {
+    const reader = await extractPackage();
+    const lists = emptyTarget();
+    lists[T_LOOKUP].items.push({ ID: 41, Title: 'Egy' }, { ID: 42, Title: 'Ismeretlen' });
+    const { sp } = targetSp(lists);
+    const ctx = installContext(reader, sp);
+    ctx.content!.idMaps.Teszt_lookup_forrs = { 1: 41 };
+    const def = listItemsDefs(reader.manifest).filter((d) => d.listKey === 'Teszt_lookup_forrs')[0];
+    expect(await new ItemProvider({ batched: false }).apply(sp, def, 'update', ctx)).toMatchObject({ outcome: 'skipped' });
+    expect(ctx.log.entries.map((e) => e.code)).toEqual(['ITEMS_RESUME_UNKNOWN_ITEMS', 'ITEMS_TARGET_NOT_EMPTY']);
+    expect(lists[T_LOOKUP].items.length).toBe(2);
   });
 
   it('treats a list holding only folders as empty', async () => {

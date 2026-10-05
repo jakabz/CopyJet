@@ -6,7 +6,10 @@ import type { IPlan, IPlanStep, StepDef } from '../planner';
 
 export type ProviderMap = Partial<Record<ArtifactKind, IProvider<StepDef>>>;
 
-export type StepStatus = 'created' | 'updated' | 'skipped' | 'failed' | 'blocked' | 'cancelled';
+export type StepStatus = 'created' | 'updated' | 'skipped' | 'failed' | 'blocked' | 'cancelled' | 'previous';
+
+/** Outcomes that finish a step: an earlier run that reached one of these need not run it again. */
+export const FINISHED_STATUSES: StepStatus[] = ['created', 'updated', 'skipped'];
 
 export interface IStepResult {
   ref: IArtifactRef;
@@ -15,6 +18,8 @@ export interface IStepResult {
   error?: unknown;
   /** For 'blocked': the failed/blocked dependency that stopped this step. */
   blockedBy?: string;
+  /** For 'previous': what the earlier run did. */
+  previousStatus?: StepStatus;
 }
 
 export interface IProgressEvent {
@@ -31,6 +36,10 @@ export interface IRunOptions {
   modes?: { [key: string]: ConflictMode };
   concurrency?: number;
   onProgress?: (event: IProgressEvent) => void;
+  /** Resume: steps an earlier run finished (key → its outcome); they are reported 'previous' and not run. */
+  previous?: { [key: string]: StepStatus };
+  /** Called after every step that ran (e.g. to save the run state); a failure is logged and the run goes on. */
+  onStepDone?: (result: IStepResult) => Promise<void>;
 }
 
 export interface IRunResult {
@@ -54,6 +63,8 @@ function provider(providers: ProviderMap, step: IPlanStep): IProvider<StepDef> {
  * its dependents; independent steps keep running. A step whose dependency was created in this run runs in
  * 'update' mode even when the mode is 'skip'. On abort, steps not started are 'cancelled' and the
  * partial result is returned. Providers register the identifiers they create in ctx.tokens themselves.
+ * On resume (`previous`), steps an earlier run finished are reported 'previous' and not run; a step under one
+ * the earlier run created still runs in 'update' mode.
  */
 export async function runPlan(sp: SPFI, plan: IPlan, ctx: IInstallContext, options: IRunOptions): Promise<IRunResult> {
   const results: { [key: string]: IStepResult } = {};
@@ -61,11 +72,26 @@ export async function runPlan(sp: SPFI, plan: IPlan, ctx: IInstallContext, optio
   let done = 0;
   let aborted = false;
 
-  const finish = (step: IPlanStep, status: StepStatus, extra: Partial<IStepResult> = {}): void => {
-    results[step.ref.key] = { ref: step.ref, level: step.level, status, ...extra };
+  let saveWarned = false;
+  const finish = async (step: IPlanStep, status: StepStatus, extra: Partial<IStepResult> = {}): Promise<void> => {
+    const result: IStepResult = { ref: step.ref, level: step.level, status, ...extra };
+    results[step.ref.key] = result;
     done++;
     if (options.onProgress) options.onProgress({ done, total, ref: step.ref, status });
+    if (options.onStepDone && status !== 'previous') {
+      try {
+        await options.onStepDone(result);
+      } catch (e) {
+        if (isAbort(e)) throw e;
+        if (!saveWarned) {
+          saveWarned = true;
+          ctx.log.warn(`The run state could not be saved; a later resume may repeat steps: ${e instanceof Error ? e.message : String(e)}`, { code: 'STATE_SAVE_FAILED' });
+        }
+      }
+    }
   };
+  const createdHere = (key: string): boolean => !!results[key] && (results[key].status === 'created' || results[key].previousStatus === 'created');
+  const previous = options.previous || {};
 
   for (const level of plan.levels) {
     if (aborted || (ctx.signal && ctx.signal.aborted)) {
@@ -80,21 +106,26 @@ export async function runPlan(sp: SPFI, plan: IPlan, ctx: IInstallContext, optio
       byLock[step.lock].push(step);
     });
     const runStep = async (step: IPlanStep): Promise<void> => {
+      const before = previous[step.ref.key];
+      if (before && FINISHED_STATUSES.indexOf(before) >= 0) {
+        await finish(step, 'previous', { previousStatus: before });
+        return;
+      }
       const failedDep = step.dependsOn.filter((d) => results[d] && ['failed', 'blocked', 'cancelled'].indexOf(results[d].status) >= 0)[0];
       if (failedDep) {
         ctx.log.warn(`Skipped because ${failedDep} did not install.`, { artifact: step.ref, code: 'STEP_BLOCKED', detail: failedDep });
-        finish(step, 'blocked', { blockedBy: failedDep });
+        await finish(step, 'blocked', { blockedBy: failedDep });
         return;
       }
       try {
         let mode = (options.modes && options.modes[step.ref.key]) || options.mode || 'skip';
         // Inside something this run created (e.g. the default view of a new list) the template decides:
         // nothing there predates the install, so 'skip' would only keep SharePoint's defaults.
-        if (mode === 'skip' && step.dependsOn.some((d) => results[d] && results[d].status === 'created')) {
+        if (mode === 'skip' && step.dependsOn.some(createdHere)) {
           mode = 'update';
         }
         const r = await provider(options.providers, step).apply(sp, step.def, mode, ctx);
-        finish(step, r.outcome);
+        await finish(step, r.outcome);
       } catch (e) {
         if (isAbort(e)) throw e;
         ctx.log.error(e instanceof Error ? e.message : String(e), {
@@ -102,7 +133,7 @@ export async function runPlan(sp: SPFI, plan: IPlan, ctx: IInstallContext, optio
           code: e instanceof CopyJetError ? e.code : 'STEP_FAILED',
           detail: e instanceof CopyJetError ? e.detail : e
         });
-        finish(step, 'failed', { error: e });
+        await finish(step, 'failed', { error: e });
       }
     };
     try {
@@ -126,7 +157,7 @@ export async function runPlan(sp: SPFI, plan: IPlan, ctx: IInstallContext, optio
   if (aborted) ctx.log.warn('Installation stopped by the user.', { code: 'RUN_ABORTED' });
 
   const steps = plan.steps.map((s) => results[s.ref.key]);
-  const counts: Record<StepStatus, number> = { created: 0, updated: 0, skipped: 0, failed: 0, blocked: 0, cancelled: 0 };
+  const counts: Record<StepStatus, number> = { created: 0, updated: 0, skipped: 0, failed: 0, blocked: 0, cancelled: 0, previous: 0 };
   steps.forEach((s) => counts[s.status]++);
   return { steps, counts, aborted };
 }

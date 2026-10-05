@@ -3,6 +3,7 @@ import * as strings from 'CopyJetInstallWebPartStrings';
 import { Logger } from '../../../core/logger';
 import { PrincipalMapper, TermMapper } from '../../../core/mapping';
 import type { ConflictMode, ITemplateReader } from '../../../core/model';
+import type { IRunState } from '../../../core/state';
 import { downloadLog } from '../../../shared/components/LogViewer';
 import { WizardShell } from '../../../shared/components/WizardShell';
 import { templateFileName } from '../../../shared/components/download';
@@ -11,6 +12,7 @@ import { InstallRun, type RunStatus } from './InstallRun';
 import { LoadStep } from './LoadStep';
 import { MappingStep } from './MappingStep';
 import { PreviewStep } from './PreviewStep';
+import { ResumeBanner } from './ResumeBanner';
 import type { ICopyJetInstallProps } from './ICopyJetInstallProps';
 
 interface IInstallState {
@@ -30,6 +32,8 @@ interface IInstallState {
   runId: number;
   runStatus?: RunStatus;
   logger?: Logger;
+  /** An unfinished earlier run of the same template the user chose to resume. */
+  resume?: IRunState;
 }
 
 const INITIAL: IInstallState = { step: 0, disabled: [], mode: 'skip', modes: {}, previewReady: false, runId: 0 };
@@ -49,6 +53,7 @@ const CopyJetInstall: React.FC<ICopyJetInstallProps> = ({ sp, siteTitle, siteUrl
   let footerEnd: React.ReactNode;
   if (state.step === 0 || !template) {
     body = (
+      <>
       <LoadStep
         sp={sp}
         targetUrl={siteUrl}
@@ -61,11 +66,14 @@ const CopyJetInstall: React.FC<ICopyJetInstallProps> = ({ sp, siteTitle, siteUrl
             principals: reader ? new PrincipalMapper(sp, reader.manifest.principals) : undefined,
             terms: reader ? new TermMapper(sp, reader.manifest.terms || []) : undefined,
             disabled: [],
-            modes: {}
+            modes: {},
+            resume: undefined
           })
         }
         onPermissions={(ok) => update({ permissionsOk: ok })}
       />
+      {state.reader && state.permissionsOk && <ResumeBanner sp={sp} reader={state.reader} resume={state.resume} onChange={(resume) => update({ resume })} />}
+      </>
     );
     footerEnd = <Button text={strings.Next} kind="primary" disabled={!template || !state.permissionsOk} onClick={() => update({ step: 1 })} />;
   } else if (state.step === 1) {
@@ -107,6 +115,7 @@ const CopyJetInstall: React.FC<ICopyJetInstallProps> = ({ sp, siteTitle, siteUrl
         mode={state.mode}
         modes={state.modes}
         logger={state.logger!}
+        resume={state.resume}
         view={state.step === 4 ? 'result' : 'progress'}
         onStatus={(runStatus, stop) => {
           stopRef.current = stop;

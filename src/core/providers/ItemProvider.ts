@@ -32,6 +32,19 @@ import type { LocalTimeConverter } from '../items/localTime';
 import { createFolder, existingFolderPaths, listContentTypeFor, missingFolders, readListContentTypes, toServerRelativeUrl } from '../lists';
 import type { ConflictMode, IApplyResult, IArtifactRef, IContentContext, IDiffResult, IInstallContext, IItemsFile, IProvider } from '../model';
 
+/** Items written between two saves of the run state. */
+const CHECKPOINT_CHUNK = 500;
+
+/** Saves the run state mid-step when the install keeps one; a failed save does not stop the items. */
+export async function saveCheckpoint(ctx: IInstallContext): Promise<void> {
+  if (!ctx.checkpoint) return;
+  try {
+    await ctx.checkpoint();
+  } catch (e) {
+    ctx.log.warn(`The run state could not be saved: ${e instanceof Error ? e.message : String(e)}`, { code: 'STATE_SAVE_FAILED' });
+  }
+}
+
 export interface IItemProviderOptions {
   /** Write in $batch requests (default). Off in tests: the mock answers single requests only. */
   batched?: boolean;
@@ -71,8 +84,8 @@ export function systemFormValues(item: TemplateItem, which: 'all' | 'modified', 
 
 /**
  * Items of a list (first round): every value except lookups, which the 'itemLookups' step fills once the
- * ID maps of all lists exist. Written only into a list without items – without a run state CopyJet cannot
- * tell which items an earlier run already wrote, and it never duplicates or deletes them.
+ * ID maps of all lists exist. Written into a list without items, or – resuming – into a list holding only
+ * items the earlier run recorded; CopyJet never duplicates or deletes items.
  */
 export class ItemProvider implements IProvider<IListItemsDef> {
   public readonly kind = 'items' as const;
@@ -106,6 +119,9 @@ export class ItemProvider implements IProvider<IListItemsDef> {
     if (diff.status === 'new') {
       return this._write(sp, def, ref, ctx);
     }
+    if (diff.status === 'different' && (await this._resumable(sp, def, ctx))) {
+      return this._write(sp, def, ref, ctx, true);
+    }
     if (diff.status === 'different') {
       ctx.log.warn('The target list already has items; nothing was added, so no item is duplicated.', { artifact: ref, code: 'ITEMS_TARGET_NOT_EMPTY' });
     } else {
@@ -114,25 +130,74 @@ export class ItemProvider implements IProvider<IListItemsDef> {
     return { ref, outcome: 'skipped' };
   }
 
-  private async _write(sp: SPFI, def: IListItemsDef, ref: IArtifactRef, ctx: IInstallContext): Promise<IApplyResult> {
+  /**
+   * Resume (spike 14): the list has items, but each is either in the ID map the earlier run saved, or one of the
+   * chunk it was writing when it stopped (`pendingItems`). SharePoint writes a batch in order, so the unrecorded
+   * items, by ascending ID, are a prefix of that chunk; each pair is checked by title. Then the rest is written
+   * without duplicates. Any other item (added by someone, or not matching) leaves the list as it is.
+   */
+  private async _resumable(sp: SPFI, def: IListItemsDef, ctx: IInstallContext): Promise<boolean> {
+    const content = ctx.content;
+    if (!content) return false;
+    const known = content.idMaps[def.listKey] || {};
+    const pending = (content.pendingItems && content.pendingItems[def.listKey]) || [];
+    if (!Object.keys(known).length && !pending.length) return false;
+    const ref: IArtifactRef = { kind: this.kind, key: itemsKey(def.listKey) };
+    const mine: { [id: number]: boolean } = {};
+    Object.keys(known).forEach((k) => (mine[known[Number(k)]] = true));
+    const unknown: Array<{ Id: number; Title?: string }> = [];
+    // Id/FSObjType without a filter: paging by ID stays under the list view threshold.
+    for await (const page of sp.web.getList(itemsListUrl(def, ctx)).items.select('Id', 'FSObjType', 'Title').top(5000)) {
+      throwIfAborted(ctx.signal);
+      (page as Array<{ Id: number; FSObjType: number; Title?: string }>).forEach((i) => Number(i.FSObjType) === 0 && !mine[i.Id] && unknown.push(i));
+    }
+    const refuse = (): boolean => {
+      ctx.log.warn('The target list has items the earlier run did not record; nothing was added, so no item is duplicated.', { artifact: ref, code: 'ITEMS_RESUME_UNKNOWN_ITEMS' });
+      return false;
+    };
+    if (!unknown.length) return true;
+    if (unknown.length > pending.length) return refuse();
+    unknown.sort((x, y) => x.Id - y.Id);
+    const file = await content.reader.getJson<IItemsFile>(def.source, ctx.signal);
+    const bySource: { [id: number]: TemplateItem } = {};
+    file.items.forEach((i) => (bySource[i.sourceId] = i));
+    const titleMatches = (target: { Title?: string }, sourceId: number): boolean => {
+      const item = bySource[sourceId];
+      const title = item && item.values.Title;
+      return typeof title !== 'string' || title === (target.Title || '');
+    };
+    if (!unknown.every((t, i) => titleMatches(t, pending[i]))) return refuse();
+    const idMap = (content.idMaps[def.listKey] = known);
+    unknown.forEach((t, i) => (idMap[pending[i]] = t.Id));
+    ctx.log.info(`${unknown.length} items written just before the interruption were recognized.`, { artifact: ref, code: 'ITEMS_RESUME_RECOVERED', detail: unknown.length });
+    return true;
+  }
+
+  private async _write(sp: SPFI, def: IListItemsDef, ref: IArtifactRef, ctx: IInstallContext, resuming: boolean = false): Promise<IApplyResult> {
     const content = contentContext(ctx);
     const file = await content.reader.getJson<IItemsFile>(def.source, ctx.signal);
-    ctx.log.info(`The target list has no items; writing ${file.items.length}.`, { artifact: ref, code: 'ITEMS_TARGET_EMPTY' });
+    const idMap = (content.idMaps[def.listKey] = content.idMaps[def.listKey] || {});
+    const todo = resuming ? file.items.filter((i) => !idMap[i.sourceId]) : file.items;
+    if (resuming) {
+      ctx.log.info(`Resuming: ${file.items.length - todo.length} items were written by the earlier run; writing ${todo.length}.`, { artifact: ref, code: 'ITEMS_RESUMED' });
+    } else {
+      ctx.log.info(`The target list has no items; writing ${file.items.length}.`, { artifact: ref, code: 'ITEMS_TARGET_EMPTY' });
+    }
     const listUrl = itemsListUrl(def, ctx);
     const fields = await readTargetFields(sp, listUrl, def.listKey, ctx.tokens);
-    warnMissingFields(file.items, fields, ref, ctx);
+    warnMissingFields(todo, fields, ref, ctx);
 
     const locale = await readWebLocale(sp);
     const times = webLocalTime(sp);
     await times.prepare(dateValuesOf(file.items, fields, 'all'), ctx.signal);
     await content.principals.map(principalKeysOf(file.items, fields), ctx.tokens, ctx.log, ctx.signal);
     const terms = content.terms;
-    if (terms) await terms.map(termKeysOf(file.items, fields), ctx.log, ctx.signal);
-    await this._ensureFolders(sp, listUrl, file.items, ref, ctx);
+    if (terms) await terms.map(termKeysOf(todo, fields), ctx.log, ctx.signal);
+    await this._ensureFolders(sp, listUrl, todo, ref, ctx);
     const contentTypes = await readListContentTypes(sp, listUrl);
 
     const missingCts: { [id: string]: boolean } = {};
-    const ops = file.items.map((item) => {
+    const ops = todo.map((item) => {
       const formValues: IFormValue[] = [];
       Object.keys(item.values).forEach((name) => {
         const f = fields[name];
@@ -153,20 +218,28 @@ export class ItemProvider implements IProvider<IListItemsDef> {
       ctx.log.warn(`Content type ${id} is not on the target list; its items get the default content type.`, { artifact: ref, code: 'ITEM_CONTENT_TYPE_MISSING', detail: id })
     );
 
-    const { results } = await runItemWrites(sp, ops, this._batched, ctx.signal);
-    const idMap = (content.idMaps[def.listKey] = content.idMaps[def.listKey] || {});
+    // In chunks, with the run state saved after each: an interrupted install knows which items it wrote.
     const failures: Array<{ sourceId: number; errors: string[] }> = [];
-    results.forEach((r, i) => {
-      const sourceId = file.items[i].sourceId;
-      if (r.id) idMap[sourceId] = r.id;
-      else failures.push({ sourceId, errors: r.errors || ['No item ID returned.'] });
-    });
-    logItemFailures(ctx, ref, failures);
-    const written = file.items.length - failures.length;
-    if (file.items.length > 0 && written === 0) {
-      throw new CopyJetError('ITEMS_FAILED', `None of the ${file.items.length} items could be written.`, failures.slice(0, 5));
+    const pending = (content.pendingItems = content.pendingItems || {});
+    for (let start = 0; start < ops.length; start += CHECKPOINT_CHUNK) {
+      // The chunk is saved before it is written: a resume can recognize what an interruption left unrecorded.
+      pending[def.listKey] = todo.slice(start, start + CHECKPOINT_CHUNK).map((i) => i.sourceId);
+      await saveCheckpoint(ctx);
+      const { results } = await runItemWrites(sp, ops.slice(start, start + CHECKPOINT_CHUNK), this._batched, ctx.signal);
+      results.forEach((r, i) => {
+        const sourceId = todo[start + i].sourceId;
+        if (r.id) idMap[sourceId] = r.id;
+        else failures.push({ sourceId, errors: r.errors || ['No item ID returned.'] });
+      });
+      delete pending[def.listKey];
+      await saveCheckpoint(ctx);
     }
-    ctx.log.info(`Items written: ${written} of ${file.items.length}.`, { artifact: ref });
+    logItemFailures(ctx, ref, failures);
+    const written = todo.length - failures.length;
+    if (todo.length > 0 && written === 0) {
+      throw new CopyJetError('ITEMS_FAILED', `None of the ${todo.length} items could be written.`, failures.slice(0, 5));
+    }
+    ctx.log.info(`Items written: ${written} of ${todo.length}.`, { artifact: ref });
     await this._attachments(sp, listUrl, file.items, idMap, ref, ctx, (item) => systemFormValues(item, 'modified', locale, times, ctx));
     return { ref, outcome: 'created' };
   }

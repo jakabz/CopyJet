@@ -69,7 +69,7 @@ describe('runPlan', () => {
     expect(fake.calls.map((c) => c.key)).toEqual(['a', 'b', 'c', 'd', 'e']);
     expect(progress).toHaveLength(5);
     expect(progress[4]).toBe('5/5 e:created');
-    expect(r.counts).toEqual({ created: 3, updated: 1, skipped: 1, failed: 0, blocked: 0, cancelled: 0 });
+    expect(r.counts).toEqual({ created: 3, updated: 1, skipped: 1, failed: 0, blocked: 0, cancelled: 0, previous: 0 });
     expect(r.aborted).toBe(false);
   });
 
@@ -142,6 +142,37 @@ describe('runPlan', () => {
     });
     expect(r.aborted).toBe(true);
     expect(r.steps.map((s) => `${s.ref.key}:${s.status}`)).toEqual(['a:created', 'b:created', 'c:cancelled', 'd:cancelled', 'e:cancelled']);
+  });
+
+  it('resumes: steps the earlier run finished are not run, failed ones are, and created parents still upgrade the mode', async () => {
+    const fake = fakeProviders();
+    const done: string[] = [];
+    const r = await runPlan(sp, sample(), ctx(), {
+      providers: fake.providers,
+      mode: 'skip',
+      previous: { a: 'created', b: 'skipped', c: 'failed', d: 'blocked' },
+      onStepDone: async (res) => {
+        done.push(`${res.ref.key}:${res.status}`);
+      }
+    });
+    expect(fake.calls.map((c) => `${c.key}:${c.mode}`)).toEqual(['c:update', 'd:skip', 'e:update']);
+    expect(r.steps.map((s) => `${s.ref.key}:${s.status}`)).toEqual(['a:previous', 'b:previous', 'c:created', 'd:created', 'e:created']);
+    expect(r.steps[0].previousStatus).toBe('created');
+    expect(r.counts.previous).toBe(2);
+    expect(done).toEqual(['c:created', 'd:created', 'e:created']);
+  });
+
+  it('keeps installing when saving the run state fails, and warns once', async () => {
+    const fake = fakeProviders();
+    const c = ctx();
+    const r = await runPlan(sp, sample(), c, {
+      providers: fake.providers,
+      onStepDone: async () => {
+        throw new Error('list locked');
+      }
+    });
+    expect(r.counts.created).toBe(5);
+    expect(c.log.entries.filter((e) => e.code === 'STATE_SAVE_FAILED')).toHaveLength(1);
   });
 
   it('fails a step whose kind has no provider', async () => {

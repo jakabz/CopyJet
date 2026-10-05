@@ -180,6 +180,13 @@ declare interface ICopyJetInstallWebPartStrings {
   LogWarn: string;
   LogError: string;
   LogEmpty: string;
+  ResumeTitle: string;
+  ResumeText: string;
+  ResumeContinue: string;
+  ResumeNew: string;
+  ResumeChosen: string;
+  ResumeCheckFailed: string;
+  StatPrevious: string;
 }
 
 declare module 'CopyJetInstallWebPartStrings' {

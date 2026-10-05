@@ -25,7 +25,9 @@ import {
 } from '../items';
 import { createFolder, existingFolderPaths, listContentTypeFor, missingFolders, readListContentTypes } from '../lists';
 import type { ConflictMode, IApplyResult, IArtifactRef, IDiffResult, IFilesMetaFile, IInstallContext, IProvider } from '../model';
-import { contentContext, itemsListUrl, systemFormValues } from './ItemProvider';
+import { contentContext, itemsListUrl, saveCheckpoint, systemFormValues } from './ItemProvider';
+
+const FILES_PER_CHECKPOINT = 25;
 
 type FileEntry = IFilesMetaFile['files'][number];
 
@@ -127,6 +129,8 @@ export class FileProvider implements IProvider<IListFilesDef> {
 
     let added = 0;
     let alreadyThere = 0;
+    // The run state is saved every few files: a resume then knows the target IDs of the files (lookups).
+    let sinceSave = 0;
     const failures: Array<{ path: string; error: string }> = [];
     const results = await limitConcurrency(
       todo.map((f) => async () => {
@@ -138,6 +142,10 @@ export class FileProvider implements IProvider<IListFilesDef> {
         await sp.web.getList(listUrl).items.getById(id).validateUpdateListItem(formValuesOf(f), true);
         if (f.sourceId) idMap[f.sourceId] = id;
         added++;
+        if (++sinceSave >= FILES_PER_CHECKPOINT) {
+          sinceSave = 0;
+          await saveCheckpoint(ctx);
+        }
       }),
       3,
       ctx.signal
