@@ -23,7 +23,8 @@ export function kindLabel(kind: ArtifactKind): string {
     items: strings.KindItems,
     page: strings.KindPage,
     files: strings.KindFiles,
-    itemLookups: strings.KindItemLookups
+    itemLookups: strings.KindItemLookups,
+    navigation: strings.KindNavigation
   };
   return labels[kind] || kind;
 }

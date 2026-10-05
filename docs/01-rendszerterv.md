@@ -259,7 +259,8 @@ A modern lapok a vászon JSON-jával (`CanvasContent1`) együtt másolódnak, a 
 
 - Bal oldali menü (`web.navigation.quicklaunch`) és felső menü (`topNavigationBar`), hierarchiával, legfeljebb 3 szintig.
 - Belső linkek tokenizálva (`{site}/Lists/...`, `{site}/SitePages/...`), külső linkek változatlanul.
-- Ütközéskezelés: *hozzáfűzés* a meglévő menühöz vagy *csere*; alapértelmezett a hozzáfűzés, duplikált cím és URL kihagyásával.
+- Ütközéskezelés: *hozzáfűzés* a meglévő menühöz, a már meglévő (azonos című és URL-ű) linkek kihagyásával. Csere nincs, mert a CopyJet a célon nem töröl (`docs/spikes/13`).
+- Célközönség: azonos tenantba átvihető, más tenantba nem. Kezdőlap: a `navigation.homePage` lap lesz a kezdőlap, ha a célon megvan.
 - Hub-navigáció nem része az 1. verziónak.
 
 ## 9. Jogosultság és biztonság

@@ -3,7 +3,7 @@ import { Icon } from '@fluentui/react';
 import * as strings from 'CopyJetSetupWebPartStrings';
 import type { IDiscoveredArtifact } from '../../../core/model';
 import { ui } from '../../../shared/components/ui';
-import { CATEGORIES, buildTree, categoryOf, filterTree, format, selectAll, selectedArtifacts, toggle, toggleAll, toggleChild, type Category, type ITreeNode } from './selection';
+import { CATEGORIES, artifactTitle, buildTree, categoryOf, filterTree, format, selectAll, selectedArtifacts, toggle, toggleAll, toggleChild, type Category, type ITreeNode } from './selection';
 import styles from './CopyJetSetup.module.scss';
 
 export interface ISelectStepProps {
@@ -17,8 +17,11 @@ const CATEGORY_LABEL: Record<Category, () => string> = {
   libraries: () => strings.CategoryLibraries,
   groups: () => strings.CategoryGroups,
   columns: () => strings.CategoryColumnsAndTypes,
-  pages: () => strings.CategoryPages
+  pages: () => strings.CategoryPages,
+  navigation: () => strings.CategoryNavigation
 };
+
+const NAV_LABELS = { quickLaunch: strings.NavQuickLaunch, topNavigation: strings.NavTopNavigation, homePage: strings.NavHomePage };
 
 function unsupportedText(code: string): string {
   return (strings as unknown as Record<string, string>)[`Unsupported${code}`] || strings.UnsupportedOther;
@@ -26,7 +29,7 @@ function unsupportedText(code: string): string {
 
 function meta(a: IDiscoveredArtifact): string {
   if (a.unsupported) return unsupportedText(a.unsupported);
-  if (a.itemCount !== undefined) return format(strings.ItemCount, a.itemCount);
+  if (a.itemCount !== undefined) return format(a.ref.kind === 'navigation' ? strings.LinkCount : strings.ItemCount, a.itemCount);
   if (a.ref.kind === 'contentType') return strings.TypeContentType;
   return a.group || '';
 }
@@ -81,7 +84,7 @@ export const SelectStep: React.FC<ISelectStepProps> = ({ artifacts, selected, on
           )}
           <input className={ui.check} type="checkbox" id={id} checked={isOn(n.item)} disabled={!!n.item.unsupported} onChange={(e) => onChange(toggle(selected, n, e.target.checked))} />
           <label htmlFor={id} className={styles.rowLabel}>
-            {n.item.title}
+            {artifactTitle(n.item, NAV_LABELS)}
           </label>
           <span className={`${ui.muted} ${styles.rowMeta}`}>{meta(n.item)}</span>
         </>

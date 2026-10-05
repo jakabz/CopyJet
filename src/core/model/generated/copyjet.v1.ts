@@ -380,9 +380,16 @@ export interface IPage {
  * via the `definition` "navigation".
  */
 export interface INavigation {
+  /**
+   * A CopyJet a cél menüjéből soha nem töröl: a 'replace' is hozzáfűzésként települ (figyelmeztetéssel).
+   */
   mode?: 'append' | 'replace';
   quickLaunch?: INavNode[];
   topNavigation?: INavNode[];
+  /**
+   * 1.1: a cél kezdőlapja lesz (SitePages/<név>), ha a lap a célon megvan.
+   */
+  homePage?: string;
 }
 /**
  * This interface was referenced by `ICopyJetTemplate`'s JSON-Schema
@@ -392,6 +399,10 @@ export interface INavNode {
   title: string;
   url: TokenString;
   isExternal?: boolean;
+  /**
+   * 1.1: célközönség (Entra-csoportok azonosítói); csak azonos tenantba települ.
+   */
+  audiences?: Guid[];
   /**
    * @maxItems 100
    */

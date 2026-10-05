@@ -280,9 +280,10 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "mode": { "enum": ["append", "replace"], "default": "append" },
+        "mode": { "enum": ["append", "replace"], "default": "append", "description": "A CopyJet a cél menüjéből soha nem töröl: a 'replace' is hozzáfűzésként települ (figyelmeztetéssel)." },
         "quickLaunch": { "type": "array", "items": { "$ref": "#/$defs/navNode" } },
-        "topNavigation": { "type": "array", "items": { "$ref": "#/$defs/navNode" } }
+        "topNavigation": { "type": "array", "items": { "$ref": "#/$defs/navNode" } },
+        "homePage": { "type": "string", "pattern": "^[^/\\\\]+\\.aspx$", "description": "1.1: a cél kezdőlapja lesz (SitePages/<név>), ha a lap a célon megvan." }
       }
     },
 
@@ -294,6 +295,7 @@
         "title": { "type": "string" },
         "url": { "$ref": "#/$defs/tokenString" },
         "isExternal": { "type": "boolean", "default": false },
+        "audiences": { "type": "array", "items": { "$ref": "#/$defs/guid" }, "description": "1.1: célközönség (Entra-csoportok azonosítói); csak azonos tenantba települ." },
         "children": { "type": "array", "maxItems": 100, "items": { "$ref": "#/$defs/navNode" } }
       }
     },

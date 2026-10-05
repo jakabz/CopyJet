@@ -1,8 +1,8 @@
 import type { ArtifactKind, IArtifactRef, IDiscoveredArtifact } from '../../../core/model';
 
-/** Sections of the selection tree as in docs/ui (setup-1): lists, libraries, groups, columns and types, pages. */
-export type Category = 'lists' | 'libraries' | 'groups' | 'columns' | 'pages';
-export const CATEGORIES: Category[] = ['lists', 'libraries', 'groups', 'columns', 'pages'];
+/** Sections of the selection tree as in docs/ui (setup-1): lists, libraries, groups, columns and types, pages, navigation. */
+export type Category = 'lists' | 'libraries' | 'groups' | 'columns' | 'pages' | 'navigation';
+export const CATEGORIES: Category[] = ['lists', 'libraries', 'groups', 'columns', 'pages', 'navigation'];
 
 const DOCUMENT_LIBRARY = 101;
 
@@ -25,6 +25,8 @@ export function categoryOf(a: IDiscoveredArtifact): Category | undefined {
       return 'columns';
     case 'page':
       return 'pages';
+    case 'navigation':
+      return 'navigation';
     default:
       return undefined;
   }
@@ -32,12 +34,13 @@ export function categoryOf(a: IDiscoveredArtifact): Category | undefined {
 
 /** Groups the discovery into sections; list columns and views go under their list (parentKey). */
 export function buildTree(artifacts: IDiscoveredArtifact[]): Record<Category, ITreeNode[]> {
-  const tree: Record<Category, ITreeNode[]> = { lists: [], libraries: [], groups: [], columns: [], pages: [] };
+  const tree: Record<Category, ITreeNode[]> = { lists: [], libraries: [], groups: [], columns: [], pages: [], navigation: [] };
   artifacts.forEach((a) => {
     const c = categoryOf(a);
     if (c) tree[c].push({ item: a, children: artifacts.filter((x) => CHILD_KINDS.indexOf(x.ref.kind) >= 0 && x.parentKey === a.ref.key) });
   });
-  const order = (n: ITreeNode): string => `${n.item.ref.kind === 'contentType' ? 1 : 0}${n.item.title.toLowerCase()}`;
+  // Navigation keeps its natural order (left menu, top menu, home page).
+  const order = (n: ITreeNode): string => (n.item.ref.kind === 'navigation' ? '' : `${n.item.ref.kind === 'contentType' ? 1 : 0}${n.item.title.toLowerCase()}`);
   CATEGORIES.forEach((c) => tree[c].sort((a, b) => order(a).localeCompare(order(b))));
   return tree;
 }
@@ -108,4 +111,12 @@ export function selectedArtifacts(artifacts: IDiscoveredArtifact[], selected: st
 /** "{0} / {1} kiválasztva" style formatting for loc strings. */
 export function format(template: string, ...args: Array<string | number>): string {
   return template.replace(/\{(\d+)\}/g, (m, i) => (args[Number(i)] !== undefined ? String(args[Number(i)]) : m));
+}
+
+/** Display title of an artifact: navigation entries are named in the UI language. */
+export function artifactTitle(a: IDiscoveredArtifact, labels: { quickLaunch: string; topNavigation: string; homePage: string }): string {
+  if (a.ref.kind !== 'navigation') return a.title;
+  if (a.ref.key === 'navigation:quickLaunch') return labels.quickLaunch;
+  if (a.ref.key === 'navigation:topNavigation') return labels.topNavigation;
+  return format(labels.homePage, a.title);
 }

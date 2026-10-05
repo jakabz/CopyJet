@@ -122,7 +122,16 @@ declare interface ICopyJetInstallWebPartStrings {
   KindPage: string;
   PhasePages: string;
   ContentPages: string;
+  ContentNavigation: string;
   ReasonpageExists: string;
+  KindNavigation: string;
+  PhaseNavigation: string;
+  NavQuickLaunch: string;
+  NavTopNavigation: string;
+  NavHomePage: string;
+  ReasonnewLinks: string;
+  ReasonhomePageDiffers: string;
+  ReasonhomePageMissing: string;
   KindFiles: string;
   PhaseFiles: string;
   ContentFiles: string;

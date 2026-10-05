@@ -2,6 +2,7 @@ import { ContentTypeExtractor } from '../extractors/ContentTypeExtractor';
 import { FileExtractor } from '../extractors/FileExtractor';
 import { GroupExtractor } from '../extractors/GroupExtractor';
 import { ItemExtractor } from '../extractors/ItemExtractor';
+import { NavigationExtractor } from '../extractors/NavigationExtractor';
 import { PageExtractor } from '../extractors/PageExtractor';
 import { ListExtractor } from '../extractors/ListExtractor';
 import { ListFieldExtractor } from '../extractors/ListFieldExtractor';
@@ -14,6 +15,7 @@ import { FileProvider } from '../providers/FileProvider';
 import { GroupProvider } from '../providers/GroupProvider';
 import { ItemLookupProvider } from '../providers/ItemLookupProvider';
 import { ItemProvider, type IItemProviderOptions } from '../providers/ItemProvider';
+import { NavigationProvider } from '../providers/NavigationProvider';
 import { PageProvider } from '../providers/PageProvider';
 import { ListFieldProvider } from '../providers/ListFieldProvider';
 import { ListProvider } from '../providers/ListProvider';
@@ -36,7 +38,8 @@ export function createProviders(fetchImpl?: FetchLike, items?: IItemProviderOpti
     items: new ItemProvider(items),
     itemLookups: new ItemLookupProvider(items),
     files: new FileProvider(),
-    page: new PageProvider()
+    page: new PageProvider(),
+    navigation: new NavigationProvider()
   } as ProviderMap;
 }
 
@@ -54,6 +57,7 @@ export function createExtractors(): Array<IExtractor<unknown>> {
     new ViewExtractor(),
     new ItemExtractor(),
     new FileExtractor(),
-    new PageExtractor()
+    new PageExtractor(),
+    new NavigationExtractor()
   ] as Array<IExtractor<unknown>>;
 }

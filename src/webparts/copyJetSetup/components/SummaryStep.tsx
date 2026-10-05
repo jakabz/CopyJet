@@ -3,6 +3,7 @@ import type { SPFI } from '@pnp/sp';
 import * as strings from 'CopyJetSetupWebPartStrings';
 import { extractTemplate } from '../../../core/engine';
 import { lookupTargetsWithoutContent } from '../../../core/items';
+import { countNodes } from '../../../core/navigation';
 import { Logger } from '../../../core/logger';
 import type { ArtifactKind, IArtifactRef, ICopyJetTemplate, IDiscoveredArtifact } from '../../../core/model';
 import { Button, Message, Stats, ui } from '../../../shared/components/ui';
@@ -69,6 +70,16 @@ export const SummaryStep: React.FC<ISummaryStepProps> = ({ sp, refs, pages, disc
   )
     .map((key) => discovered.filter((a) => a.ref.key === `list:${key}`)[0])
     .filter((a) => !!a && canCopyContent(a));
+  const nav = t.navigation;
+  const navParts: string[] = [];
+  if (nav && nav.quickLaunch && nav.quickLaunch.length) navParts.push(format(strings.NavQuickLaunchText, countNodes(nav.quickLaunch)));
+  if (nav && nav.topNavigation && nav.topNavigation.length) navParts.push(format(strings.NavTopNavigationText, countNodes(nav.topNavigation)));
+  if (nav && nav.homePage) {
+    const home = nav.homePage.toLowerCase();
+    // Pages are not dry-run here; the selected ones are what the template will carry.
+    const inTemplate = pages.some((p) => p.ref.key.toLowerCase() === `page:${home}`);
+    navParts.push(format(inTemplate ? strings.NavHomePageText : strings.NavHomePageOutside, nav.homePage));
+  }
   const listFields = t.lists.reduce((n, l) => n + (l.fields || []).length, 0);
   const views = t.lists.reduce((n, l) => n + (l.views || []).length, 0);
 
@@ -150,6 +161,13 @@ export const SummaryStep: React.FC<ISummaryStepProps> = ({ sp, refs, pages, disc
               <td className={ui.strong}>{strings.AreaPages}</td>
               <td>{pages.map((p) => p.title).join(', ')}</td>
               <td className={ui.muted}>{strings.PagesNote}</td>
+            </tr>
+          )}
+          {navParts.length > 0 && (
+            <tr>
+              <td className={ui.strong}>{strings.AreaNavigation}</td>
+              <td>{navParts.join(', ')}</td>
+              <td className={ui.muted}>{strings.NavigationNote}</td>
             </tr>
           )}
           {t.groups.length > 0 && (

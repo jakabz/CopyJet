@@ -1,5 +1,6 @@
 import { listFilesDefs, type IListFilesDef } from '../files/filesModel';
 import { listItemsDefs, type IListItemsDef } from '../items/itemsModel';
+import { navKeys, type INavStepDef } from '../navigation/navModel';
 import { pageKey, type IPageDef } from '../pages/pageModel';
 import { listFieldDefs, type IListFieldDef } from '../lists/listFields';
 import { listViewDefs, type IListViewDef } from '../lists/views';
@@ -18,7 +19,7 @@ import {
 } from './dependencies';
 
 /** Provider input per kind. */
-export type StepDef = IGroup | IField | IContentType | IList | IListFieldDef | IListViewDef | IListItemsDef | IListFilesDef | IPageDef;
+export type StepDef = IGroup | IField | IContentType | IList | IListFieldDef | IListViewDef | IListItemsDef | IListFilesDef | IPageDef | INavStepDef;
 
 export interface IPlanStep {
   ref: IArtifactRef;
@@ -56,7 +57,7 @@ export interface IPlanOptions {
 }
 
 /** Install order within a level (rendszerterv §6): groups, site columns, content types, lists, list columns, views, content. */
-const KIND_ORDER: ArtifactKind[] = ['group', 'siteField', 'contentType', 'list', 'listField', 'view', 'items', 'files', 'itemLookups', 'page'];
+const KIND_ORDER: ArtifactKind[] = ['group', 'siteField', 'contentType', 'list', 'listField', 'view', 'items', 'files', 'itemLookups', 'page', 'navigation'];
 
 interface ITemplateNode {
   ref: IArtifactRef;
@@ -92,8 +93,30 @@ export function templateNodes(template: ICopyJetTemplate): ITemplateNode[] {
     ...listFilesDefs(template).map((d) => node('files', artifactKeys.files(d.listKey), d, filesDependencies(d, template.lists))),
     // Pages point at lists, views and their content by ID: they come after all of them, but a failed list only
     // leaves its web part empty, so these are ordering-only edges (spike 12).
-    ...(template.pages || []).map((p) => node('page', pageKey(p.name), p, [], pageAfter(template)))
+    ...(template.pages || []).map((p) => node('page', pageKey(p.name), p, [], pageAfter(template))),
+    // Menus and the home page point at lists and pages: last, ordering-only as well (spike 13).
+    ...navigationDefs(template).map((d) => node('navigation', navKeys[d.part], d, [], navigationAfter(template)))
   ];
+}
+
+/** One step per carried menu, and one for the home page. */
+function navigationDefs(template: ICopyJetTemplate): INavStepDef[] {
+  const nav = template.navigation;
+  if (!nav) return [];
+  const out: INavStepDef[] = [];
+  (['quickLaunch', 'topNavigation'] as const).forEach((part) => {
+    const nodes = nav[part];
+    if (nodes && nodes.length) out.push({ part, nodes, mode: nav.mode, sourceTenant: template.meta.sourceTenant });
+  });
+  if (nav.homePage) {
+    const page = nav.homePage;
+    out.push({ part: 'homePage', page, inTemplate: (template.pages || []).some((p) => p.name.toLowerCase() === page.toLowerCase()) });
+  }
+  return out;
+}
+
+function navigationAfter(template: ICopyJetTemplate): IArtifactRef[] {
+  return pageAfter(template).concat((template.pages || []).map((p) => ({ kind: 'page' as const, key: pageKey(p.name) })));
 }
 
 /** Every structure and content step of the template's lists (what a page may show). */

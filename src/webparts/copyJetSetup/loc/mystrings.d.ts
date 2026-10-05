@@ -119,6 +119,18 @@ declare interface ICopyJetSetupWebPartStrings {
   AreaPages: string;
   PagesNote: string;
   KindPage: string;
+  CategoryNavigation: string;
+  NavQuickLaunch: string;
+  NavTopNavigation: string;
+  NavHomePage: string;
+  LinkCount: string;
+  KindNavigation: string;
+  AreaNavigation: string;
+  NavQuickLaunchText: string;
+  NavTopNavigationText: string;
+  NavHomePageText: string;
+  NavHomePageOutside: string;
+  NavigationNote: string;
   On: string;
   KindFiles: string;
   StatFiles: string;
