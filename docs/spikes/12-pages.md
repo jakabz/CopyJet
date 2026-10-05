@@ -240,3 +240,8 @@ A Cél „Teszt lista” listája legyen meg (a korábbi telepítésből), hogy 
 - a kezdőlap beállítása a navigációs lépésbe kerül, mert a cél kezdőlapjának cseréje külön döntés.
 
 Állapot: **lezárva**.
+
+
+## Utólagos megjegyzés (2026-10-05)
+
+A provider eredetileg a vázlatmentés előtt nevezte át a lapot, így a telepítés `CopyJet-teszt(1).aspx`-et hozott létre. A még közzé nem tett lap első `savepageasdraft` mentése ugyanis a címből újranevezi a fájlt. Az 1.6.1.0 óta a sorrend: létrehozás → kivétel → vázlatmentés → átnevezés → közzététel (részletek: `13-navigation.md`, B).

@@ -141,6 +141,7 @@ function targetSp(existing: string[] = []): { sp: ReturnType<typeof createMockSp
   const saved: Array<{ [k: string]: unknown }> = [];
   const files: string[] = [];
   const folders: string[] = [];
+  let renamedTo = 'Page';
   const { sp } = createMockSp((req) => {
     let m: RegExpExecArray | null;
     if (req.method === 'GET' && /\/sitepages\/pages\?\$select=/i.test(req.url)) return { body: { value: existing.map((f, i) => ({ Id: i + 1, FileName: f })) } };
@@ -148,8 +149,10 @@ function targetSp(existing: string[] = []): { sp: ReturnType<typeof createMockSp
       calls.push(`create ${(req.body as { PageLayoutType: string }).PageLayoutType}`);
       return { body: { Id: 9, FileName: 'Page.aspx' } };
     }
+    if (req.method === 'GET' && /\/sitepages\/pages\(9\)\?\$select=/i.test(req.url)) return { body: { Id: 9, FileName: `${renamedTo}.aspx` } };
     if (req.method === 'POST' && /\/getList\('\/sites\/Cel\/SitePages'\)\/items\(9\)\/validateupdatelistitem$/i.test(req.url)) {
-      calls.push(`rename ${(req.body as { formValues: Array<{ FieldValue: string }> }).formValues[0].FieldValue}`);
+      renamedTo = (req.body as { formValues: Array<{ FieldValue: string }> }).formValues[0].FieldValue;
+      calls.push(`rename ${renamedTo}`);
       return { body: { value: [{ FieldName: 'FileLeafRef', HasException: false }] } };
     }
     if (req.method === 'POST' && (m = /\/sitepages\/pages\((\d+)\)\/(checkoutpage|savepageasdraft|publish)$/i.exec(req.url))) {
@@ -189,13 +192,13 @@ function installContext(reader: ITemplateReader, sp: ReturnType<typeof createMoc
 }
 
 describe('PageProvider', () => {
-  it('creates, renames, checks out, saves the resolved canvas and publishes – images first', async () => {
+  it('creates, checks out, saves the resolved canvas, renames and publishes – images first', async () => {
     const reader = await extract();
     const target = targetSp();
     const ctx = installContext(reader, target.sp);
     const def = reader.manifest.pages[0];
     expect(await new PageProvider().apply(target.sp, def, 'skip', ctx)).toMatchObject({ outcome: 'created' });
-    expect(target.calls).toEqual(['create Article', 'rename CopyJet-teszt', 'ensureSiteAssets', 'checkoutpage 9', 'savepageasdraft 9', 'publish 9']);
+    expect(target.calls).toEqual(['create Article', 'ensureSiteAssets', 'checkoutpage 9', 'savepageasdraft 9', 'rename CopyJet-teszt', 'publish 9']);
     expect(target.files).toEqual(['/sites/Cel/SiteAssets/SitePages/CopyJet-teszt/kép 1.png', '/sites/Cel/SiteAssets/SitePages/CopyJet-teszt/fejlec.jpeg']);
     const body = target.saved[0];
     const text = String(body.CanvasContent1);

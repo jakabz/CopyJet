@@ -16,6 +16,7 @@ import {
   listSitePages,
   pageKey,
   publishSitePage,
+  readSitePage,
   saveSitePageDraft,
   siteAssetsPathOf,
   type IClientSideWebPart,
@@ -40,8 +41,9 @@ const pageLists = new WeakMap<object, Promise<ISitePageInfo[]>>();
 const webPartLists = new WeakMap<object, Promise<IClientSideWebPart[]>>();
 
 /**
- * Modern pages (spike 12 B): create → rename to the template's file name → check out → save the resolved
- * canvas as draft → publish, so the page ends at 1.0. SiteAssets images are uploaded first (never
+ * Modern pages (spike 12 B): create → check out → save the resolved canvas as draft → rename to the
+ * template's file name → publish, so the page ends at 1.0. The rename must follow the first draft save: that
+ * save names a never-published page after its title, and a name taken by the page itself gave "(1)" (2026-10-05). SiteAssets images are uploaded first (never
  * overwritten). An existing page is replaced only in update mode; the target's home page is left alone
  * (setting it is a navigation decision).
  */
@@ -77,13 +79,17 @@ export class PageProvider implements IProvider<IPageDef> {
     if (!created || !created.Id) {
       throw new CopyJetError('PAGE_CREATE_FAILED', `SharePoint returned no page for ${def.name}.`);
     }
-    await this._rename(sp, created.Id, def.name, ctx);
-    await this._write(sp, def, created.Id, ref, ctx);
+    await this._write(sp, def, created.Id, ref, ctx, def.name);
+    const final = (await readSitePage(sp, created.Id)).FileName;
+    if (final && final.toLowerCase() !== def.name.toLowerCase()) {
+      ctx.log.warn(`The page was saved as ${final} instead of ${def.name}; a later run will not recognise it.`, { artifact: ref, code: 'PAGE_NAME_DIFFERS', detail: final });
+    }
     ctx.log.info('Page created and published.', { artifact: ref });
     return { ref, outcome: 'created' };
   }
 
-  private async _write(sp: SPFI, def: IPageDef, id: number, ref: IArtifactRef, ctx: IInstallContext): Promise<void> {
+  /** `rename` names a new page after its first draft save, before it is published. */
+  private async _write(sp: SPFI, def: IPageDef, id: number, ref: IArtifactRef, ctx: IInstallContext, rename?: string): Promise<void> {
     const content = contentContext(ctx);
     const file = await content.reader.getJson<IPageFile>(def.source, ctx.signal);
     await this._uploadAssets(sp, def.assets || [], ref, ctx);
@@ -112,10 +118,11 @@ export class PageProvider implements IProvider<IPageDef> {
     }
     await checkoutSitePage(sp, id);
     await saveSitePageDraft(sp, id, values);
+    if (rename) await this._rename(sp, id, rename, ctx);
     await publishSitePage(sp, id);
   }
 
-  /** The new page gets the template's file name (FileLeafRef without .aspx) before its content is saved. */
+  /** The new page gets the template's file name (FileLeafRef without .aspx). */
   private async _rename(sp: SPFI, id: number, name: string, ctx: IInstallContext): Promise<void> {
     const web = ctx.tokens.get('siterelative') || '';
     const result = await sp.web
