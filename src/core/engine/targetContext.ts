@@ -1,5 +1,6 @@
 import type { SPFI } from '@pnp/sp';
 import '@pnp/sp/webs';
+import '@pnp/sp/sites';
 import { throwIfAborted } from '../errors';
 import { readAssociatedGroups } from '../groups';
 import type { Logger } from '../logger/Logger';
@@ -22,11 +23,14 @@ export interface IInstallContent {
  */
 export async function createInstallContext(sp: SPFI, log: Logger, signal?: AbortSignal, content?: IInstallContent): Promise<IInstallContext> {
   throwIfAborted(signal);
-  const [web, associated] = await Promise.all([
-    sp.web.select('Url', 'ServerRelativeUrl', 'Title')<{ Url: string; ServerRelativeUrl: string; Title: string }>(),
-    readAssociatedGroups(sp)
+  const [web, associated, siteInfo] = await Promise.all([
+    sp.web.select('Id', 'Url', 'ServerRelativeUrl', 'Title')<{ Id: string; Url: string; ServerRelativeUrl: string; Title: string }>(),
+    readAssociatedGroups(sp),
+    sp.site.select('Id')<{ Id?: string }>().catch(() => ({ Id: undefined }))
   ]);
   const tokens = TokenContext.forSite({ absoluteUrl: web.Url, serverRelativeUrl: web.ServerRelativeUrl, title: web.Title });
+  if (web.Id) tokens.set('webid', undefined, web.Id);
+  if (siteInfo.Id) tokens.set('siteid', undefined, siteInfo.Id);
   if (associated.owner !== undefined) tokens.set('associatedownergroup', undefined, String(associated.owner));
   if (associated.member !== undefined) tokens.set('associatedmembergroup', undefined, String(associated.member));
   if (associated.visitor !== undefined) tokens.set('associatedvisitorgroup', undefined, String(associated.visitor));

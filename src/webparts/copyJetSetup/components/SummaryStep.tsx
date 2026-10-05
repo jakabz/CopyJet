@@ -11,7 +11,10 @@ import { canCopyContent, format } from './selection';
 
 export interface ISummaryStepProps {
   sp: SPFI;
+  /** The structure to dry-run (pages are left out: their images would be downloaded). */
   refs: IArtifactRef[];
+  /** Selected pages, shown as they are. */
+  pages: IDiscoveredArtifact[];
   discovered: IDiscoveredArtifact[];
   name: string;
   createdBy: string;
@@ -34,7 +37,7 @@ interface IAnalysis {
  * Step 3 (docs/ui setup-3): a dry run of the extraction shows what the template will contain and which
  * dependencies are missing from the selection. It covers the structure only: items are read at export.
  */
-export const SummaryStep: React.FC<ISummaryStepProps> = ({ sp, refs, discovered, name, createdBy, kindLabel, content, contentKeys, onAddContent, onAddMissing }) => {
+export const SummaryStep: React.FC<ISummaryStepProps> = ({ sp, refs, pages, discovered, name, createdBy, kindLabel, content, contentKeys, onAddContent, onAddMissing }) => {
   const [analysis, setAnalysis] = React.useState<IAnalysis | undefined>(undefined);
   const [error, setError] = React.useState<string | undefined>(undefined);
   const selectionKey = refs.map((r) => r.key).join('|');
@@ -140,6 +143,13 @@ export const SummaryStep: React.FC<ISummaryStepProps> = ({ sp, refs, discovered,
                 {content.withVersions > 0 ? format(strings.FilesWithVersions, content.withVersions) : ''}
               </td>
               <td className={ui.muted}>{strings.FilesNote}</td>
+            </tr>
+          )}
+          {pages.length > 0 && (
+            <tr>
+              <td className={ui.strong}>{strings.AreaPages}</td>
+              <td>{pages.map((p) => p.title).join(', ')}</td>
+              <td className={ui.muted}>{strings.PagesNote}</td>
             </tr>
           )}
           {t.groups.length > 0 && (

@@ -52,6 +52,8 @@ export class ViewProvider implements IProvider<IListViewDef> {
     const diff = await this.diff(sp, def, ctx);
     throwIfAborted(ctx.signal);
     const ref = diff.ref;
+    // Pages point at views by ID: register the view that serves this template view (existing or created).
+    if (diff.target) this._register(def, diff.target.Id, ctx);
 
     switch (diff.status) {
       case 'new':
@@ -91,6 +93,7 @@ export class ViewProvider implements IProvider<IListViewDef> {
     if (scopeNumber(view.scope) !== 0) changes.push('scope');
     if (view.customFormatter) changes.push('customFormatter');
     if (view.default) changes.push('default');
+    this._register(def, created.Id, ctx);
     await this._configure(sp, def, created.Id, changes, ctx);
     ctx.log.info('View created.', { artifact: ref });
     return { ref, outcome: 'created' };
@@ -129,6 +132,12 @@ export class ViewProvider implements IProvider<IListViewDef> {
     if (Object.keys(props).length) {
       await target.update(props);
     }
+  }
+
+  /** {viewid:<listkey>/<title>}; titles a token argument cannot carry (":" or braces) are left out. */
+  private _register(def: IListViewDef, viewId: string, ctx: IInstallContext): void {
+    const arg = `${def.listKey}/${def.view.title}`;
+    if (/^[^{}:]+$/.test(arg)) ctx.tokens.set('viewid', arg, viewId);
   }
 
   private _resolved(view: IView, ctx: IInstallContext): IView {

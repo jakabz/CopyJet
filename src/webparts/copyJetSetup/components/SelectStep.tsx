@@ -16,7 +16,8 @@ const CATEGORY_LABEL: Record<Category, () => string> = {
   lists: () => strings.CategoryLists,
   libraries: () => strings.CategoryLibraries,
   groups: () => strings.CategoryGroups,
-  columns: () => strings.CategoryColumnsAndTypes
+  columns: () => strings.CategoryColumnsAndTypes,
+  pages: () => strings.CategoryPages
 };
 
 function unsupportedText(code: string): string {

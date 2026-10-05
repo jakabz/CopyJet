@@ -39,6 +39,7 @@ const PHASES: Array<[ArtifactKind, () => string]> = [
   ['view', () => strings.PhaseViews],
   ['items', () => strings.PhaseItems],
   ['files', () => strings.PhaseFiles],
+  ['page', () => strings.PhasePages],
   ['itemLookups', () => strings.PhaseItemLookups]
 ];
 

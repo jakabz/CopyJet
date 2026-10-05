@@ -1,8 +1,8 @@
 import type { ArtifactKind, IArtifactRef, IDiscoveredArtifact } from '../../../core/model';
 
-/** Sections of the selection tree as in docs/ui (setup-1): lists, libraries, groups, columns and types. */
-export type Category = 'lists' | 'libraries' | 'groups' | 'columns';
-export const CATEGORIES: Category[] = ['lists', 'libraries', 'groups', 'columns'];
+/** Sections of the selection tree as in docs/ui (setup-1): lists, libraries, groups, columns and types, pages. */
+export type Category = 'lists' | 'libraries' | 'groups' | 'columns' | 'pages';
+export const CATEGORIES: Category[] = ['lists', 'libraries', 'groups', 'columns', 'pages'];
 
 const DOCUMENT_LIBRARY = 101;
 
@@ -23,6 +23,8 @@ export function categoryOf(a: IDiscoveredArtifact): Category | undefined {
     case 'siteField':
     case 'contentType':
       return 'columns';
+    case 'page':
+      return 'pages';
     default:
       return undefined;
   }
@@ -30,7 +32,7 @@ export function categoryOf(a: IDiscoveredArtifact): Category | undefined {
 
 /** Groups the discovery into sections; list columns and views go under their list (parentKey). */
 export function buildTree(artifacts: IDiscoveredArtifact[]): Record<Category, ITreeNode[]> {
-  const tree: Record<Category, ITreeNode[]> = { lists: [], libraries: [], groups: [], columns: [] };
+  const tree: Record<Category, ITreeNode[]> = { lists: [], libraries: [], groups: [], columns: [], pages: [] };
   artifacts.forEach((a) => {
     const c = categoryOf(a);
     if (c) tree[c].push({ item: a, children: artifacts.filter((x) => CHILD_KINDS.indexOf(x.ref.kind) >= 0 && x.parentKey === a.ref.key) });

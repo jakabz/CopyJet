@@ -185,6 +185,7 @@ export const LoadStep: React.FC<ILoadStepProps> = ({ sp, targetUrl, reader, file
               {format(strings.ContentSummary, t.lists.length, listFields, views)}
               {t.meta.includesContent && items ? format(strings.ContentItems, items) : ''}
               {t.meta.includesContent && files ? format(strings.ContentFiles, files, Math.max(1, Math.round(bytes / 1048576))) : ''}
+              {t.pages.length ? format(strings.ContentPages, t.pages.length) : ''}
             </span>
             <span style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
               {t.meta.checksum ? t.meta.checksum.slice(0, 18) + '…' : strings.NoChecksum}

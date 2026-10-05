@@ -34,6 +34,8 @@ function typeLabel(a: IDiscoveredArtifact): string {
       return strings.TypeLibrary;
     case 'groups':
       return strings.TypeGroup;
+    case 'pages':
+      return strings.TypePage;
     default:
       return strings.TypeList;
   }
@@ -81,7 +83,7 @@ export const OptionsStep: React.FC<IOptionsStepProps> = ({ items, name, descript
                   >
                     <td className={ui.strong}>{i.title}</td>
                     <td className={ui.muted}>{typeLabel(i)}</td>
-                    <td>{group ? strings.CopyGroup : withContent(i.ref.key) ? strings.CopyStructureContent : strings.CopyStructure}</td>
+                    <td>{group ? strings.CopyGroup : i.ref.kind === 'page' ? strings.CopyWithWebParts : withContent(i.ref.key) ? strings.CopyStructureContent : strings.CopyStructure}</td>
                     <td className={ui.muted}>{group ? strings.MembersOff : isLibrary(i) ? (withContent(i.ref.key) && withVersions(i.ref.key) ? strings.On : strings.Off) : strings.Dash}</td>
                   </tr>
                 );
@@ -142,7 +144,11 @@ export const OptionsStep: React.FC<IOptionsStepProps> = ({ items, name, descript
                 <Icon iconName="Cancel" />
               </button>
             </div>
-            {current.ref.kind === 'group' ? (
+            {current.ref.kind === 'page' ? (
+              <span className={ui.muted} style={{ fontSize: 13 }}>
+                {strings.PageNote}
+              </span>
+            ) : current.ref.kind === 'group' ? (
               <>
                 <span>
                   <input className={ui.check} type="checkbox" id="cj-members" disabled /> <label htmlFor="cj-members">{strings.IncludeMembers}</label>
