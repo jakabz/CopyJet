@@ -163,7 +163,7 @@ export const LoadStep: React.FC<ILoadStepProps> = ({ sp, targetUrl, reader, file
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
             <Button text={strings.LoadFromUrl} disabled={!url.trim() || busy} onClick={loadUrl} />
             <Button text={strings.PickFromLibrary} disabled />
-            <span className={ui.muted}>{strings.Phase2}</span>
+            <span className={ui.muted}>{strings.NotYetAvailable}</span>
           </div>
         </div>
       </div>

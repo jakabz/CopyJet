@@ -41,12 +41,12 @@ function typeLabel(a: IDiscoveredArtifact): string {
   }
 }
 
-const Phase2: React.FC = () => <span className={ui.muted}> {strings.Phase2}</span>;
+const NotYetAvailable: React.FC = () => <span className={ui.muted}> {strings.NotYetAvailable}</span>;
 
 /**
  * Step 2 (docs/ui setup-2): per-item copy options with a side panel, global settings. Lists can carry their
- * items, libraries their files (optionally with earlier versions); group members and the folder filter follow
- * later in phase 2 and are shown switched off.
+ * items, libraries their files (optionally with earlier versions); group members and the folder filter are
+ * not implemented yet and are shown switched off.
  */
 export const OptionsStep: React.FC<IOptionsStepProps> = ({ items, name, description, onName, onDescription, content, onContent, preserveAuthors, onPreserveAuthors, versions, onVersions, maxFileMb, onMaxFileMb }) => {
   const [open, setOpen] = React.useState<string | undefined>(undefined);
@@ -152,7 +152,7 @@ export const OptionsStep: React.FC<IOptionsStepProps> = ({ items, name, descript
               <>
                 <span>
                   <input className={ui.check} type="checkbox" id="cj-members" disabled /> <label htmlFor="cj-members">{strings.IncludeMembers}</label>
-                  <Phase2 />
+                  <NotYetAvailable />
                 </span>
                 <span className={ui.muted} style={{ fontSize: 13 }}>
                   {strings.MembersNote}
@@ -177,12 +177,13 @@ export const OptionsStep: React.FC<IOptionsStepProps> = ({ items, name, descript
                       className={ui.check}
                     />{' '}
                     <label htmlFor="cj-m2">{strings.CopyStructureContent}</label>
-                    {!canCopyContent(current) && <Phase2 />}
+                    {!canCopyContent(current) && <span className={ui.muted}> {strings.ContentNotSupported}</span>}
                   </span>
                 </fieldset>
                 <div className={ui.field}>
                   <label htmlFor="cj-folder" className={ui.label}>
                     {strings.FolderFilter}
+                    <NotYetAvailable />
                   </label>
                   <input id="cj-folder" className={ui.input} type="text" placeholder={strings.FolderFilterPlaceholder} disabled />
                 </div>

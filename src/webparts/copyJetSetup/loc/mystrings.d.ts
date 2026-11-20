@@ -51,7 +51,8 @@ declare interface ICopyJetSetupWebPartStrings {
   MembersOff: string;
   Off: string;
   Dash: string;
-  Phase2: string;
+  NotYetAvailable: string;
+  ContentNotSupported: string;
   GlobalSettings: string;
   NameLabel: string;
   NameRequired: string;

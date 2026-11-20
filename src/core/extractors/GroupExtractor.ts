@@ -71,7 +71,7 @@ export class GroupExtractor implements IExtractor<IGroup> {
       .forEach((key) => opts.log.warn('Group not found on the source site.', { artifact: { kind: this.kind, key }, code: 'GROUP_NOT_FOUND' }));
   }
 
-  /** Owner as a token: an associated group, another copied group, or – for a user – the Owners group until users are mapped (phase 2). */
+  /** Owner as a token: an associated group, another copied group, or – for a user – the Owners group (user owners are not mapped yet). */
   private _ownerToken(info: IGroupInfoLike, security: IWebSecurity, keyById: { [id: number]: string }, opts: IExtractOptions, ref: IArtifactRef): string {
     const owner = info.Owner;
     const a = security.associated;
