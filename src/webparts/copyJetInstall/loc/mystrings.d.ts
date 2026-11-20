@@ -40,7 +40,7 @@ declare interface ICopyJetInstallWebPartStrings {
   PermissionsChecking: string;
   PermissionsMissing: string;
   PermissionsMissingDetail: string;
-  Phase2: string;
+  NotYetAvailable: string;
   Users: string;
   ManagedMetadata: string;
   NothingToMap: string;
@@ -77,7 +77,6 @@ declare interface ICopyJetInstallWebPartStrings {
   ReasonlistMissing: string;
   ReasontitleConflict: string;
   ReasonidConflict: string;
-  Reasontaxonomy: string;
   ReasontermSetMissing: string;
   ReasonnameConflict: string;
   Reasontemplate: string;

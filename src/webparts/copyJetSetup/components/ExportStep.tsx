@@ -103,7 +103,7 @@ export const ExportStep: React.FC<IExportStepProps> = ({ sp, refs, discovered, n
         </div>
         <span>
           <input className={ui.check} type="checkbox" id="cj-save-lib" disabled /> <label htmlFor="cj-save-lib">{strings.SaveToLibrary}</label>
-          <span className={ui.muted}> {strings.Phase2}</span>
+          <span className={ui.muted}> {strings.NotYetAvailable}</span>
         </span>
         <Button text={strings.Download} kind={status === 'done' ? 'primary' : 'default'} disabled={status !== 'done'} onClick={download} />
       </div>
